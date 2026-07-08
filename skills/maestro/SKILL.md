@@ -20,6 +20,26 @@ go build -o maestro . && ./maestro
 go run .
 ```
 
+### Scripts
+
+Two scripts in `scripts/` help run feedback sessions:
+
+**`maestro-heartbeat.sh`** — starts a background heartbeat so the server knows the agent is listening. Runs until stopped or the plan is approved.
+
+```bash
+scripts/maestro-heartbeat.sh --plan-name demo --port 8080
+# Stop it when done:
+scripts/maestro-heartbeat.sh --plan-name demo --stop
+```
+
+**`maestro-listen.sh`** — watches the plan file for changes using fswatch (or stat polling). Outputs plan JSON on change.
+
+```bash
+scripts/maestro-listen.sh --plan-name demo --port 8080 --timeout 7200
+```
+
+Run both from the project root or `maestro/` dir. See `--help` on each for all options.
+
 ### Configuration
 
 | Env Var     | Default   | Description               |
@@ -396,42 +416,41 @@ After crafting a plan (via `plan-modules` or manually), start a feedback session
    > You can comment on individual items by clicking them, send general feedback in the discussion sidebar, and click "Approve Plan" when satisfied.
    > I'll wait here for your feedback.
 
-### 2. The Listen Loop
+### 2. Start the Heartbeat
 
-Now enter the feedback loop. The plan file on disk (`maestro/plans/{plan-id}.toon`) is updated by the Maestro server whenever a message is added or the state changes (because `persistPlan()` rewrites the file). You'll watch this file for changes using OS-level file watching — zero token burn during idle.
-
-**Primary mechanism — `fswatch` (macOS):**
+Before entering the listen loop, start a background heartbeat so the server tracks the agent as **listening**:
 
 ```bash
-# Blocks until the plan file changes (use a generous timeout, e.g. 7200s)
-fswatch -1 "maestro/plans/{plan-id}.toon"
+scripts/maestro-heartbeat.sh --plan-name "{plan-name}" --port 8080 --interval 15
 ```
 
-**Fallback — `stat` polling (works everywhere):**
+This runs in the background and persists across listen loop iterations. Stop it when the plan is approved:
 
 ```bash
-# Poll mtime with 2s sleep when fswatch isn't available
-last_mtime=$(stat -f %m "maestro/plans/{plan-id}.toon" 2>/dev/null || true)
-while true; do
-  cur_mtime=$(stat -f %m "maestro/plans/{plan-id}.toon" 2>/dev/null || true)
-  if [ "$cur_mtime" != "$last_mtime" ]; then
-    last_mtime=$cur_mtime
-    break
-  fi
-  sleep 2
-done
+scripts/maestro-heartbeat.sh --plan-name "{plan-name}" --stop
 ```
 
-Wrap the file-watch command in a bash tool call with a sufficiently long timeout. When the call returns, it means the plan file changed — proceed to the processor step below.
+### 3. The Listen Loop
 
-**Agent status heartbeat:**
-The server tracks agent presence via heartbeat. While the agent is idle (waiting for user input), send a heartbeat every 15s to keep the status dot solid blue:
+Now enter the feedback loop. The plan file on disk (`maestro/plans/{plan-name}.toon`) is updated by the Maestro server whenever a message is added or the state changes (because `persistPlan()` rewrites the file). Use `maestro-listen.sh` to watch for changes:
 
 ```bash
-curl -s -X POST http://localhost:8080/api/agent/{plan-id}/heartbeat
+# Blocks until the plan file changes (zero token burn during idle)
+# Outputs plan JSON on change, exits with code 2 on timeout.
+scripts/maestro-listen.sh --plan-name "{plan-name}" --port 8080 --timeout 7200
 ```
 
-Run this in a background loop (e.g. `while true; do curl -s -X POST ...; sleep 15; done &`). The server marks the agent as **offline** after 1 minute of no heartbeat.
+**Flag reference (`maestro-listen.sh`):**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+  | `--plan-name` | *(required)* | Plan name to watch |
+| `--maestro-dir` | `.` | Path to maestro directory |
+| `--port` | `8080` | Maestro server port |
+| `--timeout` | `7200` | Max seconds to wait (0 = no limit) |
+| `--poll-fallback-sleep` | `2` | Seconds between stat polls (fallback only) |
+
+Exit codes: `0` = change detected (plan JSON on stdout), `1` = error, `2` = timeout.
 
 **Status transitions are automatic:**
 - When the **user** sends a message, the server auto-sets the dot to **thinking** (pulsing blue).
@@ -439,22 +458,19 @@ Run this in a background loop (e.g. `while true; do curl -s -X POST ...; sleep 1
 - The agent only needs to set **offline** explicitly (e.g. when the plan is approved).
 - No more manual `thinking`/`listening` status calls needed.
 
-### 3. Process Changes
+### 4. Process Changes
 
-After the file-watch wakes you, poll the API for the current state:
-
-```bash
-curl -s http://localhost:8080/api/plan/{plan-id}
-```
-
-Parse the JSON response. On each wake, compare against the previous state (tracked in variables you maintain throughout the loop). Detect:
+After `maestro-listen.sh` returns, the plan JSON is already on stdout (or pipe it in). Parse it with `jq` or inline bash. On each wake, compare against the previous state (tracked in variables you maintain throughout the loop). Detect:
 
 1. **New human messages** — any message where `role == "human"` and `id` is not in your set of previously seen IDs.
 2. **State change** — `state == "approved"` means the user approved the plan.
 
-**Tracking state across iterations:**
-- Maintain a bash variable or small temp file with the set of seen message IDs.
-- On each wake, compare, process deltas, then update the set.
+**Example: piping the listen output into your processor:**
+
+```bash
+plan_json=$(scripts/maestro-listen.sh --plan-name "{plan-name}" --port 8080 --timeout 7200)
+# Now parse $plan_json...
+```
 
 ### 4. Respond to Feedback
 
@@ -503,24 +519,22 @@ If the user presses Ctrl-C during the file-watch (the bash call fails/interrupts
 ```
 1. Start server, create plan, open browser
 2. Initialize last_seen_msg_ids = {}  (from current plan messages)
-3. Start background heartbeat loop (every 15s):
-   curl -X POST http://localhost:8080/api/agent/{id}/heartbeat
-4. Loop:
-   a. Run fswatch on plan file (blocks, no token burn)
-   b. Fetch plan: curl http://localhost:8080/api/plan/{id}
-   c. Parse JSON
-   d. For each msg in plan.messages where role=="human" and id not in last_seen_msg_ids:
+3. Loop:
+   a. Run maestro-listen.sh (handles heartbeat + file watch, returns plan JSON)
+      plan_json=$(scripts/maestro-listen.sh --plan-id {id} --port 8080 --timeout 7200)
+   b. Parse JSON from $plan_json
+   c. For each msg in plan.messages where role=="human" and id not in last_seen_msg_ids:
       - Analyze: resolve item_ref if set, read context from plan.modules
       - Respond: POST /api/plan/{id}/messages (role="agent", text="...")
       - Update last_seen_msg_ids
       (thinking/listening transitions are automatic — no status calls needed)
-   e. If plan.state == "approved":
-      - Set offline:
+   d. If plan.state == "approved":
+      - Set offline (already done by maestro-listen.sh cleanup, but explicit is fine too):
         curl -X POST http://localhost:8080/api/agent/{id}/status -d '{"status":"offline"}'
       - Post final acknowledgment
       - Break loop → proceed to implementation
-   f. If user interrupted → ask what to do
-   g. Goto 4a
+   e. If user interrupted → ask what to do
+   f. Goto 3a
 ```
 
 ### 8. Configuration
@@ -529,14 +543,15 @@ If the user presses Ctrl-C during the file-watch (the bash call fails/interrupts
 |---|---|---|
 | `PLANS_DIR` | `maestro/plans` | Directory with `.toon` files |
 | `MAESTRO_PORT` | `8080` | Port for the Maestro server |
-| `POLL_FALLBACK_SLEEP` | `2` | Seconds between `stat` polls (fallback only) |
+
+For listen loop script flags, run `scripts/maestro-listen.sh --help`.
 
 ### 9. Edge Cases
 
 | Scenario | Handling |
-|---|---|
-| No `fswatch` available | Use `stat` polling fallback with 2s sleep |
-| User edits `.toon` file directly | File-watch wakes you; detect module changes via API diff; acknowledge the edits |
+|---|---|---|
+| No `fswatch` available | `maestro-listen.sh` auto-falls back to `stat` polling (--poll-fallback-sleep flag) |
+| User edits `.toon` file directly | `maestro-listen.sh` wakes on file change; detect module changes via API diff; acknowledge the edits |
 | User revokes approval | `state` goes back to `draft` — stay in the loop; acknowledge the reversal |
 | Multiple rapid messages | Process all new messages in batch on one wake; group related responses |
 | Message deleted | Messages array shrinks — just update your tracking set; no action needed |
