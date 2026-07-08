@@ -17,7 +17,7 @@ Make sure `maestro` is on your PATH (run `./setup.sh --add-to-path` from the rep
 maestro
 
 # Or with custom settings
-PORT=9090 PLANS_DIR=/tmp/plans maestro
+PORT=9090 MAESTRO_PLANS_DIR=/tmp/plans maestro
 ```
 
 ### Scripts
@@ -45,7 +45,7 @@ Run both from the project root or `maestro/` dir. See `--help` on each for all o
 | Env Var       | Default                | Description                                      |
 |---------------|------------------------|--------------------------------------------------|
 | `PORT`        | `8080`                 | HTTP server port                                 |
-| `PLANS_DIR`   | `plans`                | Directory with `.toon` files                     |
+| `MAESTRO_PLANS_DIR` | `plans`               | Directory with `.toon` files                     |
 | `MAESTRO_DIR` | Binary directory or CWD | Directory containing templates/ and static/ assets |
 
 ## Plan Data Model
@@ -131,7 +131,7 @@ Messages are stored alongside the plan in-memory and persisted to the `.toon` fi
 
 ## Plan File Storage
 
-- Plans are stored as `.toon` files in the `PLANS_DIR` directory.
+- Plans are stored as `.toon` files in the `MAESTRO_PLANS_DIR` directory.
 - The file name (without `.toon` extension) becomes the plan ID used in URLs and API calls.
 - The server watches the directory for file changes and reloads automatically.
 - When a plan file changes, the server broadcasts the updated plan via WebSocket to all connected clients viewing that plan.

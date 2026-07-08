@@ -20,7 +20,7 @@ func main() {
 		port = "8080"
 	}
 
-	plansDir := os.Getenv("PLANS_DIR")
+	plansDir := os.Getenv("MAESTRO_PLANS_DIR")
 	if plansDir == "" {
 		plansDir = "plans"
 	}
