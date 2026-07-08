@@ -42,10 +42,11 @@ Run both from the project root or `maestro/` dir. See `--help` on each for all o
 
 ### Configuration
 
-| Env Var     | Default   | Description               |
-|-------------|-----------|---------------------------|
-| `PORT`      | `8080`    | HTTP server port          |
-| `PLANS_DIR` | `plans`   | Directory with `.toon` files |
+| Env Var       | Default                | Description                                      |
+|---------------|------------------------|--------------------------------------------------|
+| `PORT`        | `8080`                 | HTTP server port                                 |
+| `PLANS_DIR`   | `plans`                | Directory with `.toon` files                     |
+| `MAESTRO_DIR` | Binary directory or CWD | Directory containing templates/ and static/ assets |
 
 ## Plan Data Model
 

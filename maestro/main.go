@@ -13,6 +13,8 @@ import (
 )
 
 func main() {
+	baseDir := serverDir()
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -26,7 +28,7 @@ func main() {
 	// Ensure plans directory exists
 	os.MkdirAll(plansDir, 0755)
 
-	tmpl, err := parseTemplates()
+	tmpl, err := parseTemplates(baseDir)
 	if err != nil {
 		log.Fatalf("parse templates: %v", err)
 	}
@@ -64,13 +66,13 @@ func main() {
 	}
 
 	// Static files
-	fsys := http.FileServer(http.Dir("static"))
+	fsys := http.FileServer(http.Dir(filepath.Join(baseDir, "static")))
 	http.Handle("/static/", http.StripPrefix("/static/", fsys))
 	http.Handle("/style.css", fsys)
 	http.Handle("/script.js", fsys)
 
 	// Register all routes
-	registerRoutes(tmpl, store, hub, agentState)
+	registerRoutes(tmpl, store, hub, agentState, baseDir)
 
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Starting server on http://localhost%s", addr)
@@ -78,20 +80,33 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
+// serverDir returns the directory containing the Maestro server's assets.
+// Precedence: MAESTRO_DIR env var > os.Executable() dir > CWD.
+func serverDir() string {
+	if d := os.Getenv("MAESTRO_DIR"); d != "" {
+		return d
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		return filepath.Dir(exe)
+	}
+	return "."
+}
+
 // parseTemplates parses only base.html and component templates
 // (not page templates) to create a base template set for cloning.
-func parseTemplates() (*template.Template, error) {
+func parseTemplates(baseDir string) (*template.Template, error) {
 	t := template.New("").Funcs(template.FuncMap{
 		"lower":   strings.ToLower,
 		"timeago": timeago,
 		"add":     func(a, b int) int { return a + b },
 	})
 	// Parse base layout
-	if _, err := t.ParseFiles("templates/base.html"); err != nil {
+	if _, err := t.ParseFiles(filepath.Join(baseDir, "templates/base.html")); err != nil {
 		return nil, err
 	}
 	// Parse all component templates
-	err := filepath.WalkDir("templates/components", func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(filepath.Join(baseDir, "templates/components"), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
