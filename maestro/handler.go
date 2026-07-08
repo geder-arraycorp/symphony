@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -61,7 +62,7 @@ type PlanPageData struct {
 	PlanID string
 }
 
-func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, agentState *AgentState) {
+func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, agentState *AgentState, baseDir string) {
 	// Plan listing
 	http.HandleFunc("/plans", func(w http.ResponseWriter, r *http.Request) {
 		plans := store.List()
@@ -70,7 +71,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 			Year:  2026,
 			Plans: plans,
 		}
-		renderPage(w, baseTmpl, "templates/plans.html", data)
+		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/plans.html"), data)
 	})
 
 	// Plan detail page
@@ -91,7 +92,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 			Plan:   plan,
 			PlanID: id,
 		}
-		renderPage(w, baseTmpl, "templates/plan.html", data)
+		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/plan.html"), data)
 	})
 
 	// API: list plans

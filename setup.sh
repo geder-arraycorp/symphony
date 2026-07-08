@@ -110,6 +110,7 @@ if $DRY_RUN; then
     echo "[DRY RUN]   # Maestro Planning Server"
     echo "[DRY RUN]   export PATH=\"\$PATH:$MAESTRO_DIR\""
     echo "[DRY RUN]   export MAESTRO_DIR=\"$MAESTRO_DIR\""
+    echo "[DRY RUN]   export MAESTRO_PLANS_DIR=\"$MAESTRO_DIR/plans\""
 else
     # Resolve to absolute path (may fail if dir doesn't exist)
     MAESTRO_DIR="$(cd "$MAESTRO_DIR" 2>/dev/null && pwd || { echo "Error: directory not found: $MAESTRO_DIR" >&2; exit 1; })"
@@ -128,6 +129,7 @@ else
             echo "$BLOCK_MARKER"
             echo "export PATH=\"\$PATH:$MAESTRO_DIR\""
             echo "export MAESTRO_DIR=\"$MAESTRO_DIR\""
+            echo "export MAESTRO_PLANS_DIR=\"\$MAESTRO_DIR/plans\""
         } >> "$RC_FILE"
         echo "  added Maestro config to $RC_FILE"
     fi
