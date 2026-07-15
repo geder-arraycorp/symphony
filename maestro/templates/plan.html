@@ -182,7 +182,7 @@
 			case "assumptions": body.appendChild(renderAssumptions(mod.items)); break;
 			case "changes": body.appendChild(renderChanges(mod.items)); break;
 			case "notes": body.appendChild(renderNotes(mod.items)); break;
-			case "questions": body.appendChild(renderQuestions(mod.items)); break;
+			case "questions": renderQuestions(mod.items, body); break;
 			case "table": body.appendChild(renderTable(mod)); break;
 			default: body.appendChild(renderGeneric(mod.items));
 		}
@@ -352,7 +352,7 @@
 		return div;
 	}
 
-	function renderQuestions(items) {
+	function renderQuestions(items, moduleEl) {
 		const ul = document.createElement("ul");
 		ul.className = "item-list questions-list";
 		(items || []).forEach(function(item, ii) {
@@ -392,7 +392,19 @@
 
 			ul.appendChild(li);
 		});
-		return ul;
+
+		// Send bar
+		const sendBar = document.createElement("div");
+		sendBar.className = "questions-send-bar";
+		sendBar.innerHTML =
+			'<span class="questions-send-count" data-qs-count="0">0 answered</span>' +
+			'<button class="questions-send-btn" disabled>Send Responses</button>' +
+			'<span class="questions-send-status"></span>';
+		moduleEl.appendChild(ul);
+		moduleEl.appendChild(sendBar);
+
+		// Set up the send-bar interactivity
+		setupQuestionSendBar(moduleEl);
 	}
 
 	function renderTable(mod) {
@@ -563,6 +575,14 @@
 			openReplyPopup(el, pos, label);
 		});
 		modContainer.querySelectorAll("[data-item-idx]").forEach(addHighlightClass);
+
+		// Initialize send bars for question modules rendered by the server
+		modContainer.querySelectorAll("[data-module-idx]").forEach(function(wrapper) {
+			var body = wrapper.querySelector(".module-questions .module-body");
+			if (body) {
+				setupQuestionSendBar(body);
+			}
+		});
 
 		// Close popup on Escape
 		document.addEventListener("keydown", function(e) {
@@ -900,53 +920,122 @@
 		});
 	}
 
-	/* ── Question Responses auto-send on blur ── */
+	/* ── Send Responses — collects all filled question answers and sends them at once ── */
 
-	document.addEventListener("DOMContentLoaded", function() {
-		document.addEventListener("focusout", function(e) {
-			const textarea = e.target;
-			if (!textarea.classList.contains("question-input")) return;
-			if (textarea.disabled) return;
+	function setupQuestionSendBar(moduleEl) {
+		const sendBar = moduleEl.querySelector(".questions-send-bar");
+		if (!sendBar) return;
+		const btn = sendBar.querySelector(".questions-send-btn");
+		const countEl = sendBar.querySelector(".questions-send-count");
+		const statusEl = sendBar.querySelector(".questions-send-status");
 
-			const text = textarea.value.trim();
-			if (!text) return;
+		// Find the module wrapper that has the data-module-idx attribute
+		const moduleWrapper = sendBar.closest("[data-module-idx]");
 
-			const li = textarea.closest("[data-item-idx]");
-			const moduleEl = li ? li.closest("[data-module-idx]") : null;
-			if (!li || !moduleEl) return;
+		function updateCount() {
+			const inputs = moduleEl.querySelectorAll(".question-item:not(.question-answered) .question-input");
+			let filled = 0;
+			inputs.forEach(function(ta) {
+				if (ta.value.trim()) filled++;
+			});
+			countEl.textContent = filled + " answered";
+			countEl.dataset.qsCount = filled;
+			btn.disabled = filled === 0;
+		}
 
-			const itemRef = moduleEl.dataset.moduleIdx + ":" + li.dataset.itemIdx;
+		// Attach input listeners to all unanswered textareas in this module
+		moduleEl.querySelectorAll(".question-item:not(.question-answered) .question-input").forEach(function(ta) {
+			ta.addEventListener("input", updateCount);
+		});
 
-			textarea.disabled = true;
-			textarea.style.opacity = "0.5";
+		// Initial count
+		updateCount();
 
-			fetch("/api/plan/" + planID + "/messages", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					role: "human",
-					text: text,
-					item_ref: itemRef
+		// Click handler
+		btn.addEventListener("click", function() {
+			if (btn.disabled) return;
+			btn.disabled = true;
+			statusEl.textContent = "Sending…";
+			statusEl.className = "questions-send-status saving";
+
+			const inputs = moduleEl.querySelectorAll(".question-item:not(.question-answered) .question-input");
+			const promises = [];
+			inputs.forEach(function(ta) {
+				const text = ta.value.trim();
+				if (!text) return;
+				const li = ta.closest("[data-item-idx]");
+				const itemRef = (moduleWrapper ? moduleWrapper.dataset.moduleIdx : "") + ":" + li.dataset.itemIdx;
+
+				ta.disabled = true;
+				ta.style.opacity = "0.5";
+
+				const p = fetch("/api/plan/" + planID + "/messages", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						role: "human",
+						text: text,
+						item_ref: itemRef
+					})
 				})
-			})
-			.then(function(r) {
-				if (!r.ok) throw new Error("Server returned " + r.status);
-				return r.json();
-			})
-			.then(function(msg) {
-				appendMessageToThread(msg);
-				const countEl = document.getElementById("messages-count");
-				if (countEl) {
-					countEl.textContent = parseInt(countEl.textContent || "0") + 1;
+				.then(function(r) {
+					if (!r.ok) throw new Error("Server returned " + r.status);
+					return r.json();
+				})
+				.then(function(msg) {
+					// Mark as answered in the DOM
+					li.classList.add("question-answered");
+					// Update status dot
+					const statusDot = li.querySelector(".question-status");
+					if (statusDot) statusDot.textContent = "✓";
+					// Show the answer text
+					const answerP = document.createElement("p");
+					answerP.className = "question-answer";
+					answerP.innerHTML = "<strong>Answer:</strong> " + escapeHtml(text);
+					li.appendChild(answerP);
+					// Remove the textarea
+					ta.remove();
+
+					// Append message to discussion thread
+					appendMessageToThread(msg);
+					const countMsgEl = document.getElementById("messages-count");
+					if (countMsgEl) {
+						countMsgEl.textContent = parseInt(countMsgEl.textContent || "0") + 1;
+					}
+				})
+				.catch(function(err) {
+					ta.disabled = false;
+					ta.style.opacity = "1";
+					throw err;
+				});
+
+				promises.push(p);
+			});
+
+			Promise.allSettled(promises).then(function(results) {
+				const succeeded = results.filter(function(r) { return r.status === "fulfilled"; }).length;
+				const failed = results.filter(function(r) { return r.status === "rejected"; }).length;
+				if (failed === 0) {
+					statusEl.textContent = "All " + succeeded + " responses sent.";
+					statusEl.className = "questions-send-status success";
+				} else if (succeeded > 0) {
+					statusEl.textContent = succeeded + " sent, " + failed + " failed.";
+					statusEl.className = "questions-send-status error";
+					btn.disabled = false;
+				} else {
+					statusEl.textContent = "Failed to send responses.";
+					statusEl.className = "questions-send-status error";
+					btn.disabled = false;
 				}
-			})
-			.catch(function(err) {
-				textarea.disabled = false;
-				textarea.style.opacity = "1";
-				console.error("Failed to send question response:", err);
+				setTimeout(function() {
+					statusEl.textContent = "";
+					statusEl.className = "questions-send-status";
+					// Re-run updateCount in case the bar is still visible
+					if (!btn.disabled) updateCount();
+				}, 3000);
 			});
 		});
-	});
+	}
 
 	/* ── Compose keyboard shortcut ── */
 
