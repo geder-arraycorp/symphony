@@ -31,7 +31,7 @@ done
 SYMPHONY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if $CURSOR; then
-  CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cursor"
+  CONFIG_DIR="$HOME/.cursor"
 else
   CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/maki"
 fi
