@@ -692,13 +692,9 @@
 			statusEl.textContent = "Added.";
 			statusEl.className = "item-reply-popup-status success";
 
-			// Append message to discussion thread
-			appendMessageToThread(msg);
-
-			// Update message count
-			const countEl = document.getElementById("messages-count");
-			if (countEl) {
-				countEl.textContent = parseInt(countEl.textContent || "0") + 1;
+			// Only append locally if WS is not connected
+			if (ws.readyState !== WebSocket.OPEN) {
+				appendMessageToThread(msg);
 			}
 
 			// Close popup after brief delay
@@ -769,31 +765,9 @@
 			statusEl.textContent = "Sent.";
 			statusEl.className = "compose-status success";
 
-			// Append the message locally (WS broadcast will also deliver it)
-			const thread = document.getElementById("messages-thread");
-			const emptyEl = thread.querySelector(".messages-empty");
-			if (emptyEl) emptyEl.remove();
-
-			const div = document.createElement("div");
-			div.className = "message message-human";
-			div.dataset.messageId = msg.id;
-			div.innerHTML =
-				'<div class="message-avatar">👤</div>' +
-				'<div class="message-bubble">' +
-					'<div class="message-meta">' +
-						'<span class="message-role">You</span>' +
-						'<span class="message-time">' + msg.created_at + '</span>' +
-					'</div>' +
-					'<p class="message-text">' + escapeHtml(msg.text) + '</p>' +
-					(msg.item_ref ? '<span class="message-item-ref">↳ referencing item ' + msg.item_ref + '</span>' : '') +
-				'<button class="message-delete-btn" onclick="deleteMessage(\'' + msg.id + '\')" title="Delete message">✕</button>' +
-			'</div>';
-			thread.appendChild(div);
-			div.scrollIntoView({ behavior: "smooth", block: "end" });
-
-			const countEl = document.getElementById("messages-count");
-			if (countEl) {
-				countEl.textContent = parseInt(countEl.textContent || "0") + 1;
+			// Only append locally if WS is not connected \u2014 otherwise WS broadcast handles it
+			if (ws.readyState !== WebSocket.OPEN) {
+				appendMessageToThread(msg);
 			}
 
 			submitBtn.disabled = false;
@@ -1009,15 +983,11 @@
 					// Remove the textarea
 					ta.remove();
 
-					// Append message to discussion thread
-					appendMessageToThread(msg);
+					// Only append locally if WS is not connected
+					if (ws.readyState !== WebSocket.OPEN) {
+						appendMessageToThread(msg);
+					}
 				});
-
-				// Update messages count
-				const countMsgEl = document.getElementById("messages-count");
-				if (countMsgEl) {
-					countMsgEl.textContent = parseInt(countMsgEl.textContent || "0") + msgs.length;
-				}
 
 				statusEl.textContent = "All " + msgs.length + " responses sent.";
 				statusEl.className = "questions-send-status success";
