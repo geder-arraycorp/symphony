@@ -159,6 +159,48 @@ func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error)
 	return &msg, nil
 }
 
+// AddMessages appends multiple messages to the plan's conversation thread atomically,
+// persists once, and triggers a single broadcast.
+func (s *PlanStore) AddMessages(id, role string, entries []struct{ Text, ItemRef string }) ([]Message, error) {
+	s.mu.Lock()
+
+	plan, ok := s.plans[id]
+	if !ok {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("plan not found: %s", id)
+	}
+
+	msgs := make([]Message, 0, len(entries))
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, e := range entries {
+		if e.Text == "" {
+			continue
+		}
+		msg := Message{
+			ID:        newMsgID(),
+			Role:      role,
+			Text:      e.Text,
+			ItemRef:   e.ItemRef,
+			CreatedAt: now,
+		}
+		plan.Messages = append(plan.Messages, msg)
+		msgs = append(msgs, msg)
+	}
+	s.mu.Unlock()
+
+	if len(msgs) == 0 {
+		return nil, fmt.Errorf("no non-empty messages to add")
+	}
+
+	if err := s.persistPlan(id); err != nil {
+		return nil, err
+	}
+	if s.onChange != nil {
+		s.onChange(id)
+	}
+	return msgs, nil
+}
+
 // DeleteMessage removes a message from the plan's conversation thread by ID.
 func (s *PlanStore) DeleteMessage(planID, msgID string) error {
 	s.mu.Lock()

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -161,40 +162,94 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 		}
 
 		if r.Method == http.MethodPost {
-			// POST /api/plan/{id}/messages — add a message to the conversation thread
+			// POST /api/plan/{id}/messages — add message(s) to the conversation thread
 			if msgID, ok := strings.CutSuffix(id, "/messages"); ok {
-				var body struct {
+				bodyBytes, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, "cannot read body", http.StatusBadRequest)
+					return
+				}
+				r.Body.Close()
+
+				// Try batch format first: { messages: [{ role, text, item_ref }, ...] }
+				var batchBody struct {
+					Messages []struct {
+						Role    string `json:"role"`
+						Text    string `json:"text"`
+						ItemRef string `json:"item_ref,omitempty"`
+					} `json:"messages"`
+				}
+				if err := json.Unmarshal(bodyBytes, &batchBody); err == nil && len(batchBody.Messages) > 1 {
+					// Batch mode — all messages must share the same role
+					role := batchBody.Messages[0].Role
+					if role != "agent" && role != "human" {
+						http.Error(w, "role must be 'agent' or 'human'", http.StatusBadRequest)
+						return
+					}
+					entries := make([]struct{ Text, ItemRef string }, 0, len(batchBody.Messages))
+					for _, m := range batchBody.Messages {
+						if m.Role != role {
+							http.Error(w, "all messages in a batch must have the same role", http.StatusBadRequest)
+							return
+						}
+						if m.Text == "" {
+							http.Error(w, "text is required for all messages", http.StatusBadRequest)
+							return
+						}
+						entries = append(entries, struct{ Text, ItemRef string }{m.Text, m.ItemRef})
+					}
+
+					msgs, err := store.AddMessages(msgID, role, entries)
+					if err != nil {
+						log.Printf("add messages error: %v", err)
+						http.Error(w, "internal error", http.StatusInternalServerError)
+						return
+					}
+
+					if role == "human" {
+						agentState.SetThinking(msgID)
+					} else if role == "agent" {
+						agentState.SetListening(msgID)
+					}
+
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(msgs)
+					return
+				}
+
+				// Single message: { role, text, item_ref }
+				var single struct {
 					Role    string `json:"role"`
 					Text    string `json:"text"`
 					ItemRef string `json:"item_ref,omitempty"`
 				}
-				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				if err := json.Unmarshal(bodyBytes, &single); err != nil {
 					http.Error(w, "invalid request body", http.StatusBadRequest)
 					return
 				}
-				if body.Role != "agent" && body.Role != "human" {
+				if single.Role != "agent" && single.Role != "human" {
 					http.Error(w, "role must be 'agent' or 'human'", http.StatusBadRequest)
 					return
 				}
-				if body.Text == "" {
+				if single.Text == "" {
 					http.Error(w, "text is required", http.StatusBadRequest)
 					return
 				}
-			msg, err := store.AddMessage(msgID, body.Role, body.Text, body.ItemRef)
-			if err != nil {
-				log.Printf("add message error: %v", err)
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
+				msg, err := store.AddMessage(msgID, single.Role, single.Text, single.ItemRef)
+				if err != nil {
+					log.Printf("add message error: %v", err)
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
 
-			// Auto-transition agent status on messages
-			if body.Role == "human" {
-				agentState.SetThinking(msgID)
-			} else if body.Role == "agent" {
-				agentState.SetListening(msgID)
-			}
+				if single.Role == "human" {
+					agentState.SetThinking(msgID)
+				} else if single.Role == "agent" {
+					agentState.SetListening(msgID)
+				}
 
-			w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(msg)
 				return
