@@ -951,38 +951,51 @@
 		// Initial count
 		updateCount();
 
-		// Click handler
+		// Click handler — sends all answers in a single batch POST
 		btn.addEventListener("click", function() {
 			if (btn.disabled) return;
 			btn.disabled = true;
 			statusEl.textContent = "Sending…";
 			statusEl.className = "questions-send-status saving";
 
+			// Collect all filled answers
 			const inputs = moduleEl.querySelectorAll(".question-item:not(.question-answered) .question-input");
-			const promises = [];
+			const messages = [];
+			const taMap = []; // parallel array: each entry -> {ta, li}
 			inputs.forEach(function(ta) {
 				const text = ta.value.trim();
 				if (!text) return;
 				const li = ta.closest("[data-item-idx]");
 				const itemRef = (moduleWrapper ? moduleWrapper.dataset.moduleIdx : "") + ":" + li.dataset.itemIdx;
+				messages.push({ role: "human", text: text, item_ref: itemRef });
+				taMap.push({ ta: ta, li: li, text: text });
+			});
 
-				ta.disabled = true;
-				ta.style.opacity = "0.5";
+			if (messages.length === 0) {
+				btn.disabled = false;
+				statusEl.textContent = "";
+				statusEl.className = "questions-send-status";
+				return;
+			}
 
-				const p = fetch("/api/plan/" + planID + "/messages", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						role: "human",
-						text: text,
-						item_ref: itemRef
-					})
-				})
-				.then(function(r) {
-					if (!r.ok) throw new Error("Server returned " + r.status);
-					return r.json();
-				})
-				.then(function(msg) {
+			fetch("/api/plan/" + planID + "/messages", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ messages: messages })
+			})
+			.then(function(r) {
+				if (!r.ok) throw new Error("Server returned " + r.status);
+				return r.json();
+			})
+			.then(function(msgs) {
+				// msgs is an array of Message objects in the same order as sent
+				msgs.forEach(function(msg, i) {
+					const entry = taMap[i];
+					if (!entry) return;
+					const li = entry.li;
+					const ta = entry.ta;
+					const text = entry.text;
+
 					// Mark as answered in the DOM
 					li.classList.add("question-answered");
 					// Update status dot
@@ -998,40 +1011,29 @@
 
 					// Append message to discussion thread
 					appendMessageToThread(msg);
-					const countMsgEl = document.getElementById("messages-count");
-					if (countMsgEl) {
-						countMsgEl.textContent = parseInt(countMsgEl.textContent || "0") + 1;
-					}
-				})
-				.catch(function(err) {
-					ta.disabled = false;
-					ta.style.opacity = "1";
-					throw err;
 				});
 
-				promises.push(p);
-			});
-
-			Promise.allSettled(promises).then(function(results) {
-				const succeeded = results.filter(function(r) { return r.status === "fulfilled"; }).length;
-				const failed = results.filter(function(r) { return r.status === "rejected"; }).length;
-				if (failed === 0) {
-					statusEl.textContent = "All " + succeeded + " responses sent.";
-					statusEl.className = "questions-send-status success";
-				} else if (succeeded > 0) {
-					statusEl.textContent = succeeded + " sent, " + failed + " failed.";
-					statusEl.className = "questions-send-status error";
-					btn.disabled = false;
-				} else {
-					statusEl.textContent = "Failed to send responses.";
-					statusEl.className = "questions-send-status error";
-					btn.disabled = false;
+				// Update messages count
+				const countMsgEl = document.getElementById("messages-count");
+				if (countMsgEl) {
+					countMsgEl.textContent = parseInt(countMsgEl.textContent || "0") + msgs.length;
 				}
+
+				statusEl.textContent = "All " + msgs.length + " responses sent.";
+				statusEl.className = "questions-send-status success";
 				setTimeout(function() {
 					statusEl.textContent = "";
 					statusEl.className = "questions-send-status";
-					// Re-run updateCount in case the bar is still visible
-					if (!btn.disabled) updateCount();
+				}, 3000);
+			})
+			.catch(function(err) {
+				console.error("Failed to send responses:", err);
+				statusEl.textContent = "Failed to send responses.";
+				statusEl.className = "questions-send-status error";
+				btn.disabled = false;
+				setTimeout(function() {
+					statusEl.textContent = "";
+					statusEl.className = "questions-send-status";
 				}, 3000);
 			});
 		});

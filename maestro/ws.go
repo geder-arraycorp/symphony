@@ -105,34 +105,60 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true }, // allow all origins
 }
 
+// wsConn wraps a WebSocket connection with a write mutex.
+// gorilla/websocket does not support concurrent writes on the same connection,
+// so all writes must be serialized per connection.
+type wsConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func newWSConn(conn *websocket.Conn) *wsConn {
+	return &wsConn{conn: conn}
+}
+
+// Write sends a text message, serialized with the per-connection mutex.
+func (wc *wsConn) Write(msg []byte) error {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	return wc.conn.WriteMessage(websocket.TextMessage, msg)
+}
+
+// Close closes the underlying WebSocket connection.
+func (wc *wsConn) Close() {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	wc.conn.Close()
+}
+
 // Hub manages WebSocket connections per plan ID.
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[string]map[*websocket.Conn]bool // planID -> set of conns
+	clients map[string]map[*wsConn]bool // planID -> set of conns
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		clients: make(map[string]map[*websocket.Conn]bool),
+		clients: make(map[string]map[*wsConn]bool),
 	}
 }
 
 // Subscribe adds a connection to a plan's update channel.
-func (h *Hub) Subscribe(planID string, conn *websocket.Conn) {
+func (h *Hub) Subscribe(planID string, wc *wsConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.clients[planID] == nil {
-		h.clients[planID] = make(map[*websocket.Conn]bool)
+		h.clients[planID] = make(map[*wsConn]bool)
 	}
-	h.clients[planID][conn] = true
+	h.clients[planID][wc] = true
 }
 
 // Unsubscribe removes a connection.
-func (h *Hub) Unsubscribe(planID string, conn *websocket.Conn) {
+func (h *Hub) Unsubscribe(planID string, wc *wsConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.clients[planID] != nil {
-		delete(h.clients[planID], conn)
+		delete(h.clients[planID], wc)
 		if len(h.clients[planID]) == 0 {
 			delete(h.clients, planID)
 		}
@@ -145,11 +171,11 @@ func (h *Hub) Broadcast(planID string, msg []byte) {
 	conns := h.clients[planID]
 	h.mu.RUnlock()
 
-	for conn := range conns {
-		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+	for wc := range conns {
+		if err := wc.Write(msg); err != nil {
 			log.Printf("ws write error: %v", err)
-			conn.Close()
-			go h.Unsubscribe(planID, conn)
+			wc.Close()
+			go h.Unsubscribe(planID, wc)
 		}
 	}
 }
@@ -168,24 +194,25 @@ func (h *Hub) handleWS(store *PlanStore, agentState *AgentState) http.HandlerFun
 			log.Printf("ws upgrade error: %v", err)
 			return
 		}
+		wc := newWSConn(conn)
 
-		h.Subscribe(planID, conn)
+		h.Subscribe(planID, wc)
 
 		// Send the current plan state immediately on connect
 		if plan := store.Get(planID); plan != nil {
 			fp := toFlatPlan(plan, agentState.GetStatus(planID))
-			if err := conn.WriteMessage(websocket.TextMessage, fp.JSON()); err != nil {
+			if err := wc.Write(fp.JSON()); err != nil {
 				log.Printf("ws initial write error: %v", err)
-				h.Unsubscribe(planID, conn)
-				conn.Close()
+				h.Unsubscribe(planID, wc)
+				wc.Close()
 				return
 			}
 		}
 
 		// Read loop — detect disconnect
 		defer func() {
-			h.Unsubscribe(planID, conn)
-			conn.Close()
+			h.Unsubscribe(planID, wc)
+			wc.Close()
 		}()
 		for {
 			_, _, err := conn.ReadMessage()
