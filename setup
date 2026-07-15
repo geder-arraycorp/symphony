@@ -15,7 +15,7 @@ HELP_MESSAGE="Usage: setup [--dry-run] [<command>] [options]
 
   Commands:
     agents      Copy AGENTS.md into the Maki config directory
-    skills      Symlink skill directories into the Maki config directory
+    skills      Symlink skill directories into the Maki config directory (use --cursor for Cursor)
     commands    Symlink command files into the Maki config directory
     providers   Symlink provider scripts into the Maki config directory
     init        Symlink init.lua into the Maki config directory
