@@ -50,7 +50,6 @@ if $DRY_RUN; then
   echo "[DRY RUN]   export PATH=\"\$PATH:$MAESTRO_DIR\""
   echo "[DRY RUN]   export MAESTRO_DIR=\"$MAESTRO_DIR\""
   echo "[DRY RUN]   export MAESTRO_PLANS_DIR=\"$MAESTRO_DIR/plans\""
-  MAESTRO_INJECT_SRC="$SYMPHONY_DIR/maestro/AGENTS_INJECT.md"
   CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/maki"
   AGENTS_DST="$CONFIG_DIR/AGENTS.md"
   if [ -f "$MAESTRO_INJECT_SRC" ]; then
@@ -82,25 +81,3 @@ else
 fi
 
 echo "  Run 'source $RC_FILE' or open a new terminal to use 'maestro'."
-
-# ── Inject Maestro agent instructions into AGENTS.md ────────────────────
-MAESTRO_INJECT_SRC="$SYMPHONY_DIR/maestro/AGENTS_INJECT.md"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/maki"
-AGENTS_DST="$CONFIG_DIR/AGENTS.md"
-INJECT_MARKER="<!-- maestro-agent-instructions -->"
-
-if [ -f "$MAESTRO_INJECT_SRC" ]; then
-  if grep -qF "$INJECT_MARKER" "$AGENTS_DST" 2>/dev/null; then
-    echo "  maestro agent instructions already in $AGENTS_DST"
-  else
-    mkdir -p "$CONFIG_DIR"
-    # Ensure the dest file exists before appending
-    [ -f "$AGENTS_DST" ] || touch "$AGENTS_DST"
-    {
-      echo ""
-      echo "$INJECT_MARKER"
-      cat "$MAESTRO_INJECT_SRC"
-    } >> "$AGENTS_DST"
-    echo "  added maestro agent instructions to $AGENTS_DST"
-  fi
-fi
