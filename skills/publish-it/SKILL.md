@@ -1,68 +1,69 @@
 ---
 name: publish-it
-description: Create a branch, commit changes, push, and open a draft PR for small fixes that don't need a planning phase. Trigger with 'publish it' or similar phrases.
+description: Publish uncommitted working-tree changes to a draft PR when the user says 'publish it', 'push it up', 'pr it', or wants small fixes shipped without a planning pass. Use plan-implementation-procedure ('pip it') when the work needs implementing or tests; publish-it acts only on changes already in the working tree.
 compatibility: opencode
 ---
-
-## Purpose
-When users say "publish it" or request to publish small fixes/changes that already have uncommitted work, use this skill to create a branch, commit with conventional commits, push, and open a draft PR. This is a lighter version of the plan implementation procedure — no planning phase.
-
-## Example Triggers
-- publish it
-- publish this
-- push it up
-- pr it
-- get this on a branch
 
 ## Workflow
 
 ### 1. Assess Current State
-Before doing anything, run the following to understand what's going on:
-- `git branch --show-current` — determine the **current branch** (this will be the PR base)
-- `git status` — check for staged/unstaged/untracked changes
-- `git diff` — see unstaged changes (these are what will go in the new branch)
-- `git log --oneline -5` — see recent commits for style reference
 
-### 2. Generate Branch Name from Changes
-Analyze `git diff` and `git status` to determine:
-- **Type** — `fix/`, `feat/`, `chore/`, `refactor/`, `docs/`, `style/`, `test/` (based on conventional commits)
-- **Scope** — the area affected (e.g., `api`, `db`, `ui`, `auth`, component name)
-- **Description** — a short kebab-case summary of what changed
+Run in parallel:
 
-Generate the branch name as `<type>/<scope>-<short-description>`. If scope is unclear, use `<type>/<short-description>`.
+- `git branch --show-current` — the **current branch** (the PR base)
+- `git rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's|origin/||'` (fallback `main`) — the **default branch**
+- `git status` — staged / unstaged / untracked changes
+- `git diff` — the changes that will ship
 
-### 3. Create Branch from Current State
-Create the new branch from the current HEAD (which includes the current branch's existing commits). The current branch will serve as the PR base target.
+**Done when** every command has run and its output is accounted for: you know the current branch, the default branch, and the full set of changes to ship.
+
+### 2. Generate Branch Name
+
+From `git diff` and `git status`, derive `type`, `scope`, and a short `description` per [Conventional Commits](../_shared/conventional-commits.md).
+
+Default branch name: `<type>/<scope>-<short-description>`. If scope is unclear, use `<type>/<short-description>`.
+
+If a Linear issue key is in context (the user mentioned it, or it appears in the current branch, a commit, or a linked PR), follow the workspace convention instead: `<linear-issue-key>/<shortWorkDescription>` (e.g. `cops-308/fixLoginTimeout`). Do not invent a key; if none is present, use the default form.
+
+**Done when** the branch name matches the chosen convention and reflects an actual change present in `git diff`.
+
+### 3. Create Branch
+
+Create the new branch from current HEAD:
 
 ```bash
-git checkout -b <type>/<scope>-<short-description>
+git checkout -b <branch-name>
 ```
 
-### 4. Commit Changes
-Stage all relevant changes (the uncommitted work from the current branch) and commit using Conventional Commits:
+The PR (step 6) targets the **current branch** from step 1. State which case you are in to the user:
+
+- Current branch is the default branch → a normal PR against default.
+- Current branch is a feature branch → a **stacked PR** onto that feature branch (the new branch carries only the uncommitted changes; the feature branch's existing commits are its base, not part of this PR's diff).
+
+**Done when** `git branch --show-current` returns the new branch.
+
+### 4. Commit
+
+Stage every change identified in step 1 and commit per [Conventional Commits](../_shared/conventional-commits.md):
 
 ```bash
 git add <files>
 git commit -m "<type>(<scope>): <description>"
 ```
 
-**Commit Types** (from Conventional Commits):
-- `feat`: A new feature
-- `fix`: A bug fix
-- `docs`: Documentation only changes
-- `style`: Changes that do not affect the meaning of the code
-- `refactor`: A code change that neither fixes a bug nor adds a feature
-- `test`: Adding missing tests or correcting existing tests
-- `chore`: Changes to build process or auxiliary tools and libraries
+**Done when** `git status` is clean — every change from step 1 is committed, nothing left untracked or unstaged.
 
-### 5. Push Branch
+### 5. Push
 
 ```bash
-git push -u origin <type>/<scope>-<short-description>
+git push -u origin <branch-name>
 ```
 
-### 6. Create Draft PR Against Current Branch
-Create a draft pull request with the **current branch** (detected in step 1) as the base target:
+**Done when** the branch is pushed and remote tracking is set.
+
+### 6. Open Draft PR
+
+Open a draft PR against the current branch from step 1:
 
 ```bash
 gh pr create --draft --base <current-branch> --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
@@ -81,19 +82,16 @@ EOF
 )"
 ```
 
+**Done when** the draft PR is opened against `<current-branch>` and its URL is returned to the user.
+
 ### 7. Follow-up
-If the user wants to make additional changes after the draft PR is created:
-1. Make the changes
-2. Commit using conventional commits
-3. Push to update the draft PR
+
+Only when the user asks for more changes after the draft PR exists: make the changes, commit per [Conventional Commits](../_shared/conventional-commits.md), and push to update the draft PR.
 
 ```bash
-git add .
+git add <files>
 git commit -m "<type>(<scope>): <description>"
 git push
 ```
 
-## Important Notes
-- This skill assumes changes already exist (working tree is dirty) — it does NOT include a planning/implementation phase
-- Create the draft PR early — it should be a work-in-progress, not a finished product
-- Branch name and commit message are derived automatically from `git diff` analysis using conventional commit conventions
+**Done when** the new changes are committed and pushed and the draft PR is updated.
