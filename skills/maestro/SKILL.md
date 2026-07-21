@@ -135,6 +135,38 @@ The server drives `listening`/`thinking` automatically from message roles; the a
 
 Done when: the `.toon` file exists in the plans dir and `GET /api/plan/{id}` returns it.
 
+## Plan Mode
+
+When the session is in **plan mode**, only read-only tools are allowed — you cannot start a server, write a `.toon` file, or open a browser, because all of those are state-changing operations.
+Serving a plan in Maestro therefore cannot happen during plan mode.
+
+In plan mode:
+
+1. Author the plan using the plan-mode mechanism (e.g. `CreatePlan`) and present it for confirmation.
+2. Tell the user explicitly that the Maestro-rendered version will be served as the first step once plan mode is exited and the plan is approved.
+3. Do **not** attempt to start `maestro`, write to `$MAESTRO_PLANS_DIR`, or `open` a browser yet.
+
+`scripts/maestro-discover.sh` is read-only (curl GET probes only) and may be used during plan mode to detect an already-running server, but writing the `.toon` and starting a server must wait until plan mode is exited.
+
+Once the user approves the plan and exits plan mode, serve it in Maestro as the first execution step before any other implementation work:
+
+```bash
+port=$(scripts/maestro-discover.sh --port 8080 --max-port 8089 2>/dev/null || echo "")
+if [ -z "$port" ]; then
+  port=8080
+  maestro &
+  while ! curl -s "http://localhost:$port/api/plans" >/dev/null 2>&1; do sleep 0.2; done
+  started_server=true
+else
+  started_server=false
+fi
+# Write plans/<plan-id>.toon, then:
+curl -s -X POST "http://localhost:$port/api/admin/reload"
+open "http://localhost:$port/plan/<plan-id>"
+```
+
+Then enter the Feedback Session Workflow below.
+
 ## Feedback Session Workflow
 
 After authoring a plan, run a feedback session so the user can review, comment, and approve before implementation begins.
