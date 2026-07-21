@@ -1,7 +1,7 @@
 messages[2]{created_at,id,item_ref,role,text}:
   "2026-07-06T18:24:57Z",msg_18bfc68fafe6ac98,"6:2",human,my response
   "2026-07-06T18:37:24Z",msg_18bfc73d7aa36d88,"6:2",human,testing
-modules[8]:
+modules[9]:
   - type: criteria
     heading: Acceptance Criteria
     items[5]:
@@ -12,6 +12,15 @@ modules[8]:
       - text: Animations play sequentially without jarring
       - answered: true
         text: Responsive layout works down to 320px viewport width
+  - type: decision
+    heading: Key Decisions
+    items[2]:
+      - text: Use a card layout for decision modules
+        options: "plain list; table layout"
+        rationale: "cards mirror the risk module and give options/rationale room to breathe"
+      - text: Keep criteria and risks as sibling modules
+        options: "fold criteria into the decision item; keep separate"
+        rationale: "single-responsibility per module type; avoids duplication"
   - items[7]{owner,status,text}:
     ui-team,done,Audit existing CSS for hardcoded color values
     ui-team,done,Define design tokens and CSS custom properties
