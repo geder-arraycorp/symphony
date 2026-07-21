@@ -63,18 +63,17 @@ Done when: the `.toon` file has the typed modules it needs, every assumption is 
 
 ### 6. Publish via Maestro
 
-Use the `maestro` skill to serve the plan: discover or start the server, write the `.toon`, open the browser, tell the user where to review, start the heartbeat, and enter the listen loop.
-Do not re-implement the loop mechanics — call the `maestro` skill.
+Read the `maestro` skill's `SKILL.md` and run its feedback session workflow in full against the `.toon` you authored in step 5.
+The `maestro` skill owns the session mechanics; this skill owns the plan content and the assumptions/questions handling in step 7.
 
-Done when: the plan is served, the browser is open, the user has been told where to review, and the listen loop is running.
+Done when: the `maestro` skill's session is live and serving your plan (its start-session criterion holds), and you have entered its listen loop.
 
 ### 7. Run the feedback loop
 
-For each new human message the `maestro` listen loop returns: resolve any `item_ref` against the plan modules, respond, and update the `.toon` directly when the feedback implies a change.
-When a clarifying question is answered, flip `answered: true` and fill `answer`; when an assumption is rejected, promote it to a `risk` or remove it.
-The server reloads the file and broadcasts via WebSocket.
+Stay in the `maestro` listen loop and handle each new human message per its workflow.
+This skill's only loop logic is the assumptions/questions bookkeeping: when a clarifying question is answered, flip `answered: true` and fill `answer`; when an assumption is rejected, promote it to a `risk` or remove it.
 
-Done when: every new human message has an agent reply posted and tracked, and the `.toon` reflects every implied change.
+Done when: every new human message has an agent reply posted and tracked (per the `maestro` skill), and the `.toon` reflects every implied assumptions/questions change.
 
 ### 8. Reach shared understanding (exit)
 
@@ -91,11 +90,11 @@ Done when: the plan is approved **and** you can enumerate the evidence supportin
 
 ### 9. Hand off
 
-Once shared understanding is reached, set the agent offline, stop the heartbeat, post a final acknowledgment, and hand off to `plan-implementation-procedure` ("pip it") for execution.
+When the `maestro` skill's approval handling completes, hand off to `plan-implementation-procedure` ("pip it") for execution.
 
-Done when: the agent is offline, the heartbeat is stopped, the user is acknowledged, and control has passed to `plan-implementation-procedure`.
+Done when: control has passed to `plan-implementation-procedure`.
 
 ## Notes
 
 - The pipeline is `plan` → approve (Maestro) → `pip it` (`plan-implementation-procedure`); this skill is the upstream entry point.
-- DRY: this skill calls `research` and `maestro` and does not re-implement research dispatch or the feedback loop; its only original logic is the research gate, the assumptions-and-questions surfacing, and the shared-understanding exit criterion.
+- DRY: this skill calls `research` and `maestro`; its only original logic is the research gate, the assumptions-and-questions surfacing, and the shared-understanding exit criterion.
