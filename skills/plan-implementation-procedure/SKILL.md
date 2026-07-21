@@ -129,26 +129,8 @@ git push
 If tests need updating alongside code changes, commit them together or use the `test` type for standalone test changes. Run `npm test` after changes to ensure nothing is broken.
 
 ### 6. Conventional Commits Format
-Use **Conventional Commits** specification for all commit messages:
-- Format: `<type>(<scope>): <description>`
 
-#### Commit Types
-- `feat`: A new feature
-- `fix`: A bug fix
-- `docs`: Documentation only changes
-- `style`: Changes that do not affect the meaning of the code (white-space, formatting, etc)
-- `refactor`: A code change that neither fixes a bug nor adds a feature
-- `test`: Adding missing tests or correcting existing tests
-- `chore`: Changes to build process or auxiliary tools and libraries
-
-#### Examples
-```
-feat(auth): add user login functionality
-fix(api): resolve timeout issue in user endpoint
-docs(readme): update installation instructions
-refactor(db): optimize query performance
-test(auth): add unit tests for login flow
-```
+Use the [Conventional Commits](../_shared/conventional-commits.md) specification for all commit messages — format, types, and examples live there.
 
 ## Important Notes
 - Write tests during step 3 **before** creating the draft PR, not after
