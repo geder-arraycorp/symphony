@@ -13,6 +13,7 @@ While tailored for Maki, the individual skills are plain markdown and shell file
   - `pm` — Project management ticket generation
   - `publish-it` — Quick one-shot PR publishing
   - `create-bash-script` — Bash script scaffolding
+  - `research` — Delegate reading legwork to a background subagent against primary sources
 - **Setup script** — Symlinks everything into the correct Maki config directory
 
 ## Prerequisites

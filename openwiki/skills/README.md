@@ -35,6 +35,7 @@ compatibility: opencode  # or other agent systems
 | **pm** | `skills/pm/` | Project management ticket generation |
 | **publish-it** | `skills/publish-it/` | Quick one-shot PR publishing |
 | **create-bash-script** | `skills/create-bash-script/` | Bash script scaffolding |
+| **research** | `skills/research/` | Delegate reading legwork to a background subagent against primary sources |
 
 ## Installation
 
