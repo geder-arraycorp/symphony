@@ -4,13 +4,18 @@ A collection of skills, prompts, and configurations designed for the [Maki](http
 
 While tailored for Maki, the individual skills are plain markdown and shell files — they should transpose to other coding agent systems (e.g., Claude Code, Cline, Aider) with minimal adaptation.
 
+The skills and systems in this repo are heavily influenced by outside sources like:
+- [Matt Pocock's Skills](https://github.com/mattpocock/skills)
+- [Lavish-Axi](https://github.com/kunchenguid/lavish-axi)
+
+
 ## What's Included
 
 - **Skills** (`.config/maki/skills/`) — Markdown instruction files that teach the agent specialized workflows, such as:
   - `gh` — GitHub CLI operations (PRs, issues, releases, Actions)
   - `maki-agent` — Maki configuration and usage reference
+  - `plan` — Research-then-Maestro planning flow that reaches shared understanding before implementation
   - `plan-implementation-procedure` — Full plan-to-PR workflow
-  - `pm` — Project management ticket generation
   - `publish-it` — Quick one-shot PR publishing
   - `create-bash-script` — Bash script scaffolding
   - `research` — Delegate reading legwork to a background subagent against primary sources
