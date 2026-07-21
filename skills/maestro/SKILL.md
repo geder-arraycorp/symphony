@@ -255,11 +255,11 @@ When `plan.state == "approved"`:
 2. Post a final acknowledgment message.
 3. Stop the heartbeat: `scripts/maestro-heartbeat.sh --plan-name "{plan-name}" --port "$port" --stop`.
 4. Exit the listen loop.
-5. Proceed with implementation using the **plan-implementation-procedure** skill.
+5. Proceed with implementation by entering the **plan-implementation-procedure** orchestration loop (implementer + reviewer subagents) on the approved plan.
 
 The server also sets the agent **offline** automatically after 1 minute with no heartbeat; setting it explicitly gives the user immediate feedback.
 
-Done when: the dot is offline, the heartbeat is stopped, the user has been acknowledged, and control has passed to `plan-implementation-procedure`.
+Done when: the dot is offline, the heartbeat is stopped, the user has been acknowledged, and control has passed to the plan-implementation-procedure orchestration loop.
 
 ### 7. Handle interruption
 
@@ -288,7 +288,7 @@ Done when: the user has chosen a path and you have acted on it.
       - POST /api/agent/{id}/status {"status":"offline"}.
       - Stop the heartbeat.
       - Post final acknowledgment.
-      - Break → proceed to plan-implementation-procedure.
+      - Break → proceed to the plan-implementation-procedure orchestration loop.
    e. If interrupted → ask the user what to do.
    f. Goto 3a.
 ```

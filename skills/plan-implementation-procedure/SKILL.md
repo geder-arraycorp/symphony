@@ -1,139 +1,183 @@
 ---
 name: plan-implementation-procedure
-description: Execute the plan implementation workflow when user says 'pip it' or similar phrases. Detects the repo's default branch — creates a new branch if on default, skips branch creation if already on a feature branch. Writes tests, makes conventional commits, and opens a draft PR upon completion.
+description: Orchestrate an implementer↔reviewer subagent loop on an approved plan (max 3 iterations) until the reviewer is satisfied, then invoke publish-it to open a draft PR. Triggered by 'pip it', 'implement the plan', 'execute the plan', or automatically on maestro approval.
 compatibility: opencode
 ---
 
 ## Purpose
-When users say "pip it" or request to implement a plan, you **MUST** use this skill to execute the standard workflow: create a branch, implement code, write tests, make conventional commits, and open a draft PR when complete.
+
+After a plan is approved in Maestro — or when the user says "pip it" / "implement the plan" — orchestrate an autonomous loop of two subagents against the approved plan:
+
+- An **implementer** subagent (medium-tier) edits the working tree to satisfy the plan and writes tests.
+- A **reviewer** subagent (strong-tier) reviews the implementation + tests against the plan and best practices, emitting structured findings and a verdict.
+
+The loop runs up to **3 iterations** (implementer → reviewer per iteration). It stops early when the reviewer is satisfied (no blocker/major findings). When the loop ends, invoke the **publish-it** skill to open a draft PR. The loop never commits and never creates a branch — all git is deferred to publish-it.
 
 ## Example Triggers
 - pip it
 - pip this
 - implement the plan
 - execute the plan
+- (automatic) maestro plan approval
 
 ## Workflow
 
-### 0. Check Current Branch
-Before creating a branch, determine the current branch and the repo's default branch:
+### 0. Load the approved plan
+
+Read the canonical approved plan:
+
+- From a Maestro session: the `.toon` file at `$MAESTRO_PLANS_DIR/{plan-id}.toon` (parse its `modules` — especially `criteria` and `steps`).
+- For a standalone `pip it` (no Maestro): use the plan content already in context, or the plan file the user points to.
+
+Extract the acceptance criteria and implementation steps; these are what the implementer works to and the reviewer checks against.
+
+Done when: the plan's criteria + steps are in hand to pass to subagents.
+
+### 1. Branch check — do NOT branch
+
+The loop works in the **working tree on the current branch** and never commits or creates a branch. `publish-it` creates the branch and commits at the end.
+
+- If on the default branch: stay there. publish-it will branch from default.
+- If already on a feature branch: stay there. publish-it will open a stacked PR onto that branch.
 
 ```bash
+CURRENT_BRANCH=$(git branch --show-current)
 DEFAULT_BRANCH=$(git rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's|origin/||')
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
-CURRENT_BRANCH=$(git branch --show-current)
 ```
 
-- `git rev-parse --abbrev-ref origin/HEAD` reads the local `origin/HEAD` ref (set on `git clone`, no network call)
-- The fallback `${DEFAULT_BRANCH:-main}` handles repos where `origin/HEAD` is not set (fresh `git init`)
+Done when: confirmed the loop will not create or switch branches.
 
-### 1. Branch Creation (Conditional)
-When starting implementation of a plan:
+### 2. The orchestration loop (max 3 iterations)
 
-1. Compare `$CURRENT_BRANCH` against `$DEFAULT_BRANCH`:
-   - **If on `$DEFAULT_BRANCH`**: create a new branch with a descriptive name based on the plan/feature
-   - **If on any other branch**: **skip branch creation** — you're already on a feature/fix branch (`$CURRENT_BRANCH`). Continue with implementation directly.
+Initialize `iteration=0`, `latest_findings=""` (empty on iteration 1), `no_progress_streak=0`.
 
-2. Set a variable for use in later steps:
+Loop while `iteration < 3`:
 
 ```bash
-if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ]; then
-  # Create a new branch
-  BRANCH_NAME="<branch-name>"  # Replace with kebab-case name based on the plan
-  git checkout -b "$BRANCH_NAME"
-else
-  # Stay on current branch
-  BRANCH_NAME="$CURRENT_BRANCH"
-  echo "Already on branch '$BRANCH_NAME'. Skipping branch creation."
-fi
+iteration=$((iteration + 1))
 ```
 
-- Use kebab-case naming convention for new branches
-- Branch name should reflect the feature or fix being implemented
-- Example: `feature/add-user-authentication`, `fix/login-timeout-issue`, `refactor/database-queries`
+#### 2a. Dispatch the implementer subagent
 
-### 2. Initial Implementation
-After implementing the plan:
-1. Stage and commit the implementation code using **Conventional Commits** specification
+Spawn a **fresh** implementer subagent (foreground/blocking). In Cursor, the Task tool with `subagent_type: generalPurpose` and a **medium-tier** model; in Maki, the `task` tool (general) at medium tier.
 
-```bash
-git add .
-git commit -m "<type>(<scope>): <description>"
-```
+Pass it the **implementer dispatch contract** (below): the plan, the latest reviewer findings (empty on iteration 1), and the constraints (read working tree first, do not commit or branch, run tests + linters before reporting done).
 
-### 3. Writing Tests
-Before creating the draft PR, write comprehensive tests:
+Receive the implementer's summary: what it changed, whether tests/lint pass, and whether it made progress.
 
-1. **Create test files** in `__tests__/` following the project's existing directory structure
-2. **Test the workflow** (the full flow through layers):
-   - For API changes: test the complete request→auth→validation→db→response pipeline
-   - For component changes: render the component with testing-library and test user interactions
-   - For service changes: test the full service method with mocked dependencies
-3. **Add unit tests** where appropriate for individual functions, validators, or edge cases
-4. **Follow existing patterns** in the codebase:
-   - API route tests: mock `@/lib/database/db`, `@/lib/services/validators/adminAuthUtils`, `@/lib/services/audit/auditLogger`
-   - Component tests: use `/** @jest-environment jsdom */`, `@testing-library/react`, `screen`
-   - Pure logic: direct imports, no mocking needed
-5. **Verify nothing is broken**: run `npm test` before proceeding
+Done when: the implementer subagent has returned a change summary.
 
-When tests pass, commit them:
+#### 2b. Post the implementer summary to the user
 
-```bash
-git add .
-git commit -m "test(<scope>): add tests for <feature>"
-```
+Post a short summary of what the implementer changed (files, behavior, test/lint status) and the iteration count.
 
-### 4. Draft Pull Request
-After implementation and tests are committed:
-1. Push the branch to remote
-2. Create a **draft pull request** immediately
-3. Include a comprehensive description:
-   - Summary of changes
-   - Reference to the original plan
-   - Test results and instructions
-   - Any notes or considerations
+Done when: the user has been informed of the implementer pass.
 
-```bash
-git push -u origin "$BRANCH_NAME"
-gh pr create --draft --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
-## Summary
-<Brief summary of changes>
+#### 2c. Handle no-progress
 
-## Plan Reference
-<Link or reference to the original plan>
+If the implementer made **no changes** (or errored out):
 
-## Changes Made
-- <List of key changes>
+- Increment `no_progress_streak`.
+- If `no_progress_streak >= 2`: **halt and ask the user** whether to continue, adjust, or abort. Do not publish.
+- Else: still run the reviewer on the current state (it may find the state is actually fine, or surface what's blocking progress).
 
-## Tests
-<Test results and how to verify>
+If the implementer made progress, reset `no_progress_streak=0`.
 
-## Notes
-<Any additional notes>
-EOF
-)"
-```
+Done when: the no-progress streak is updated and the halt decision is made.
 
-### 5. Iterative Changes
-When the user requests changes after the draft PR is created:
-1. Make the requested changes (update implementation and/or tests as needed)
-2. Commit using **Conventional Commits** specification
-3. Push to the existing branch (updates the draft PR automatically)
+#### 2d. Dispatch the reviewer subagent
 
-```bash
-git add .
-git commit -m "<type>(<scope>): <description>"
-git push
-```
+Spawn a **fresh** reviewer subagent (foreground/blocking). In Cursor, the Task tool with `subagent_type: generalPurpose` and a **strong-tier** model; in Maki, the `task` tool (general) at strong tier.
 
-If tests need updating alongside code changes, commit them together or use the `test` type for standalone test changes. Run `npm test` after changes to ensure nothing is broken.
+Pass it the **reviewer dispatch contract** (below): the plan, the rubric (plan adherence, tests, best practices), instruction to run tests + linters, and the requirement to emit a structured TOON block (findings + `satisfied` verdict) via the `toon-output` skill.
 
-### 6. Conventional Commits Format
+Receive the reviewer's TOON block.
 
-Use the [Conventional Commits](../_shared/conventional-commits.md) specification for all commit messages — format, types, and examples live there.
+Done when: the reviewer subagent has returned a TOON block.
 
-## Important Notes
-- Write tests during step 3 **before** creating the draft PR, not after
-- The draft PR serves as a work-in-progress for review and feedback
-- All subsequent changes are committed and pushed to update the existing draft PR
-- Follow the repository's PR template if one exists
+#### 2e. Post the reviewer summary to the user
+
+Post a short summary: the findings (by severity), the `satisfied` verdict, and the iteration count.
+
+Done when: the user has been informed of the reviewer pass.
+
+#### 2f. Parse the verdict and decide
+
+Parse the reviewer's TOON block (use the `toon` skill's parsing rules):
+
+- If `satisfied == true` **or** there are no `blocker`/`major` findings → **loop done** (go to step 3).
+- Else: extract the `blocker`/`major` findings → set `latest_findings` to them, and loop again (2a). `minor`/`nit` findings are reported but do not extend the loop.
+
+If no parseable verdict is found, treat it as a failed reviewer pass: surface the raw reviewer output to the user, and loop again (counts as one of the 3).
+
+Done when: the verdict is parsed and the continue/stop decision is made.
+
+### 3. Publish — invoke publish-it
+
+When the loop is done (satisfied, or 3 iterations reached), invoke the **publish-it** skill on the accumulated working-tree changes:
+
+- publish-it creates the branch (Linear-key convention if a key is in context, else `<type>/<scope>-<desc>`), commits the changes, pushes, and opens a **draft** PR.
+- The loop's only git action is this publish-it call.
+
+#### 3a. Max-iter transparency
+
+If the loop ended at **max iterations (3) with unresolved findings**:
+
+- Surface the outstanding `blocker`/`major` findings and any failing tests to the user.
+- Include them in the draft PR description under an **"Outstanding Review Findings"** section so human reviewers see what's known-broken.
+
+Done when: publish-it has opened the draft PR and its URL is reported to the user.
+
+### 4. Stop at the PR
+
+After publish-it opens the draft PR, **stop**. Report the PR URL to the user. Do not write back to Maestro or Linear. (The Maestro approval-time closeout — agent offline, heartbeat stop, final ack — already happened before the loop started.)
+
+Done when: the draft PR URL is reported and no further writeback is attempted.
+
+## Implementer dispatch contract
+
+Give each fresh implementer subagent:
+
+- The **approved plan** (criteria + steps), verbatim or summarized.
+- The **latest reviewer findings** (from the previous iteration's TOON block, `blocker`/`major` only). Empty on iteration 1.
+- **Read the working tree first**: prior iterations' edits live in the working tree — read the current state of the files you will touch before editing. Do not assume a fresh checkout.
+- **Do not commit, do not create or switch branches**: edit the working tree only. The orchestrator handles git at the end via publish-it.
+- **Write tests** for the work, following the repo's existing test patterns and directory structure.
+- **Run tests + linters before reporting done**: report pass/fail. If the repo has no test infrastructure, skip tests and note that.
+- **Report back**: a concise summary of what changed, test/lint status, and whether progress was made.
+
+## Reviewer dispatch contract
+
+Give each fresh reviewer subagent:
+
+- The **approved plan** (criteria + steps) — to check adherence.
+- The **rubric**:
+  1. **Plan adherence** — does the implementation satisfy each acceptance criterion?
+  2. **Tests** — do they exist, do they pass, do they cover the plan's behavior?
+  3. **Best practices** — lint/format, security, error handling, style.
+- **Run tests + linters yourself** to verify, not just read them. Treat genuine failures as findings; treat flakes as non-blockers.
+- **Emit a structured TOON block** (via the `toon-output` skill) as your final output, with:
+  - A `findings` list — each row: `severity` (`blocker` | `major` | `minor` | `nit`), `location` (file:area), `description`, `suggested_fix`.
+  - A `satisfied` boolean verdict — `true` when no `blocker`/`major` findings remain.
+- **No parseable TOON block = failed pass**: always end with the TOON block.
+
+## Edge cases
+
+| Scenario | Handling |
+|---|---|
+| **No test infrastructure** | Best-effort: implementer skips tests and notes it; reviewer waives the tests criterion as a non-blocker finding; loop proceeds on plan + best practices. |
+| **No-progress implementer iteration** | Reviewer still runs on current state; halt and ask the user after 2 consecutive no-progress iterations. |
+| **Unparseable reviewer verdict** | Treat as a failed reviewer pass; surface raw output to the user; counts as one of the 3 iterations. |
+| **Max iterations, still unsatisfied** | Publish anyway via publish-it; surface outstanding blocker/major findings + failing tests to the user and in the PR's "Outstanding Review Findings" section. |
+| **Already on a feature branch** | Stay; publish-it opens a stacked PR onto that branch. |
+| **First iteration** | Implementer gets the plan only (no prior findings). |
+
+## Important notes
+
+- The loop never commits and never branches; publish-it is the only git action.
+- Each iteration spawns **fresh** subagents — continuity is the working tree (filesystem), not agent memory.
+- The loop continues only on `blocker`/`major` findings; `minor`/`nit` are reported but don't extend it.
+- Max 3 iterations; early-stop on `satisfied`.
+- Post a short summary to the user after each implementer pass and each reviewer pass.
+- After publish, stop at the PR — no Maestro/Linear writeback.
