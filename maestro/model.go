@@ -51,6 +51,8 @@ type Item struct {
 	Answered   bool   `json:"answered,omitempty"`
 	Answer     string `json:"answer,omitempty"`
 	ChangeType string `json:"type,omitempty"`
+	Options    string `json:"options,omitempty"`
+	Rationale  string `json:"rationale,omitempty"`
 }
 
 // FlatPlan is the JSON-friendly version with less nesting for the API and WebSocket.
@@ -82,6 +84,8 @@ type FlatItem struct {
 	Answered   bool   `json:"answered,omitempty"`
 	Answer     string `json:"answer,omitempty"`
 	ChangeType string `json:"changeType,omitempty"`
+	Options    string `json:"options,omitempty"`
+	Rationale  string `json:"rationale,omitempty"`
 }
 
 func toFlatPlan(p *Plan, agentStatus string) FlatPlan {
@@ -106,6 +110,8 @@ func toFlatPlan(p *Plan, agentStatus string) FlatPlan {
 				Answered:   it.Answered,
 				Answer:     it.Answer,
 				ChangeType: it.ChangeType,
+				Options:    it.Options,
+				Rationale:  it.Rationale,
 			})
 		}
 		fp.Modules = append(fp.Modules, fm)

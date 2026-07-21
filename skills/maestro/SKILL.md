@@ -71,6 +71,7 @@ A plan's `modules` are typed. **Bold types** below are shown off in [`GLOSSARY.m
 | Type | Purpose |
 |---|---|
 | **criteria** | Acceptance criteria (checkbox list) |
+| **decision** | Resolved decisions with alternatives and rationale |
 | **steps** | Implementation steps (numbered list) |
 | **risks** | Risk items with severity/impact |
 | **assumptions** | Assumptions being made |

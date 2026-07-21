@@ -102,6 +102,41 @@ List form:
 
 _Avoid_: issues, concerns, threats
 
+## decision
+
+Decisions — each a fork-in-the-road that was resolved, recorded with the alternatives considered and the rationale for the winner.
+Put the chosen decision in `text`; the rejected alternatives in **options**; the reasoning in **rationale**.
+Use for the output of a grilling session or any plan whose primary content is decisions rather than steps.
+`criteria` and `risks` belong in their own sibling modules — `decision` does not duplicate them.
+
+Fields: `text`, `options`, `rationale`.
+
+Tabular tuple form:
+
+```toon
+- heading: Key Decisions
+  items[2]{options,rationale,text}:
+    "library Y — too heavy; library Z — unmaintained","X wins on speed and maintenance; Y's feature set is not needed here","Use library X for the search layer"
+    "build in-house; buy SaaS","build cost is justified by tight latency requirements and existing team expertise","Build the indexing pipeline in-house"
+  type: decision
+```
+
+List form:
+
+```toon
+- type: decision
+  heading: Key Decisions
+  items[2]:
+    - text: Use library X for the search layer
+      options: "library Y — too heavy; library Z — unmaintained"
+      rationale: "X wins on speed and maintenance; Y's feature set is not needed here"
+    - text: Build the indexing pipeline in-house
+      options: "build in-house; buy SaaS"
+      rationale: "build cost is justified by tight latency requirements and existing team expertise"
+```
+
+_Avoid_: conclusions, verdicts (use `notes` for those)
+
 ## assumptions
 
 Assumptions being made — the premises the plan rests on, named so they can be challenged. One assumption per item; if one proves false, promote it to a **risk** or a **question**.
@@ -224,4 +259,4 @@ List form:
       answered: false
 ```
 
-_Avoid_: decisions, unknowns, todos
+_Avoid_: unknowns, todos

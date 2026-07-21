@@ -12,6 +12,8 @@
 			{{template "module-assumptions" .Items}}
 		{{else if eq .Type "changes"}}
 			{{template "module-changes" .Items}}
+		{{else if eq .Type "decision"}}
+			{{template "module-decisions" .Items}}
 		{{else if eq .Type "notes"}}
 			{{template "module-notes" .Items}}
 		{{else if eq .Type "questions"}}

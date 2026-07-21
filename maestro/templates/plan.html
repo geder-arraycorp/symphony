@@ -181,6 +181,7 @@
 			case "risks": body.appendChild(renderRisks(mod.items)); break;
 			case "assumptions": body.appendChild(renderAssumptions(mod.items)); break;
 			case "changes": body.appendChild(renderChanges(mod.items)); break;
+			case "decision": body.appendChild(renderDecisions(mod.items)); break;
 			case "notes": body.appendChild(renderNotes(mod.items)); break;
 			case "questions": renderQuestions(mod.items, body); break;
 			case "table": body.appendChild(renderTable(mod)); break;
@@ -293,6 +294,48 @@
 				const p = document.createElement("p");
 				p.className = "risk-detail";
 				p.innerHTML = "<strong>Mitigation:</strong> " + escapeHtml(item.mitigation);
+				card.appendChild(p);
+			}
+
+			div.appendChild(card);
+		});
+		return div;
+	}
+
+	function renderDecisions(items) {
+		const div = document.createElement("div");
+		div.className = "decision-list";
+		(items || []).forEach(function(item, ii) {
+			const card = document.createElement("div");
+			card.className = "decision-card";
+			card.dataset.itemIdx = ii;
+
+			const header = document.createElement("div");
+			header.className = "decision-header";
+
+			const marker = document.createElement("span");
+			marker.className = "decision-marker";
+			marker.textContent = "→";
+			header.appendChild(marker);
+
+			const text = document.createElement("span");
+			text.className = "decision-text";
+			text.textContent = item.text;
+			header.appendChild(text);
+
+			card.appendChild(header);
+
+			if (item.options) {
+				const p = document.createElement("p");
+				p.className = "decision-detail";
+				p.innerHTML = "<strong>Alternatives considered:</strong> " + escapeHtml(item.options);
+				card.appendChild(p);
+			}
+
+			if (item.rationale) {
+				const p = document.createElement("p");
+				p.className = "decision-detail";
+				p.innerHTML = "<strong>Rationale:</strong> " + escapeHtml(item.rationale);
 				card.appendChild(p);
 			}
 

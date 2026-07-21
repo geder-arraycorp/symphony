@@ -1,0 +1,18 @@
+{{define "module-decisions"}}
+<div class="decision-list">
+	{{range $ii, $item := .}}
+	<div class="decision-card" data-item-idx="{{$ii}}">
+		<div class="decision-header">
+			<span class="decision-marker">&rarr;</span>
+			<span class="decision-text">{{$item.Text}}</span>
+		</div>
+		{{if $item.Options}}
+		<p class="decision-detail"><strong>Alternatives considered:</strong> {{$item.Options}}</p>
+		{{end}}
+		{{if $item.Rationale}}
+		<p class="decision-detail"><strong>Rationale:</strong> {{$item.Rationale}}</p>
+		{{end}}
+	</div>
+	{{end}}
+</div>
+{{end}}
