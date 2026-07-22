@@ -77,11 +77,15 @@ func setUpTestHandler(t *testing.T) (*PlanStore, *AgentState, *http.ServeMux) {
 					http.Error(w, "all messages in a batch must have the same role", http.StatusBadRequest)
 					return
 				}
-				if m.Text == "" {
-					http.Error(w, "text is required for all messages", http.StatusBadRequest)
-					return
-				}
-				entries = append(entries, MsgEntry{Text: m.Text, ItemRef: m.ItemRef, Prompt: m.Prompt})
+			if m.Text == "" {
+				http.Error(w, "text is required for all messages", http.StatusBadRequest)
+				return
+			}
+			if m.Prompt != nil && m.Prompt.Recommended > len(m.Prompt.Options) {
+				http.Error(w, "recommended index is out of bounds", http.StatusBadRequest)
+				return
+			}
+			entries = append(entries, MsgEntry{Text: m.Text, ItemRef: m.ItemRef, Prompt: m.Prompt})
 			}
 			msgs, err := store.AddMessages(planID, role, entries)
 			if err != nil {
@@ -118,6 +122,10 @@ func setUpTestHandler(t *testing.T) (*PlanStore, *AgentState, *http.ServeMux) {
 			http.Error(w, "text is required", http.StatusBadRequest)
 			return
 		}
+		if single.Prompt != nil && single.Prompt.Recommended > len(single.Prompt.Options) {
+			http.Error(w, "recommended index is out of bounds", http.StatusBadRequest)
+			return
+		}
 		msg, err := store.AddMessage(planID, single.Role, single.Text, single.ItemRef, single.Prompt)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -147,6 +155,7 @@ func TestHandler_PostSingleMessage_WithPrompt(t *testing.T) {
 			"options":         []string{"PostgreSQL", "SQLite"},
 			"allow_custom":    true,
 			"total_questions": 3,
+			"recommended":     1,
 		},
 	}
 	bodyBytes, _ := json.Marshal(body)
@@ -185,6 +194,33 @@ func TestHandler_PostSingleMessage_WithPrompt(t *testing.T) {
 	}
 }
 
+func TestHandler_PostMessage_WithInvalidRecommended(t *testing.T) {
+	_, _, mux := setUpTestHandler(t)
+
+	body := map[string]interface{}{
+		"role": "agent",
+		"text": "Which database?",
+		"prompt": map[string]interface{}{
+			"question_key":    "db-choice",
+			"options":         []string{"PostgreSQL", "SQLite"},
+			"allow_custom":    true,
+			"total_questions": 3,
+			"recommended":     99,
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/plan/handler-test/messages", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for out-of-bounds recommended, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandler_PostBatchMessages_WithPrompt(t *testing.T) {
 	store, _, mux := setUpTestHandler(t)
 
@@ -193,11 +229,12 @@ func TestHandler_PostBatchMessages_WithPrompt(t *testing.T) {
 			{
 				"role": "agent",
 				"text": "Question 1",
-				"prompt": map[string]interface{}{
-					"question_key":    "q1",
-					"options":         []string{"A", "B"},
-					"total_questions": 2,
-				},
+			"prompt": map[string]interface{}{
+				"question_key":    "q1",
+				"options":         []string{"A", "B"},
+				"total_questions": 2,
+				"recommended":     1,
+			},
 			},
 			{
 				"role": "agent",
