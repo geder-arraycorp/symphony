@@ -1,11 +1,20 @@
 ---
 name: grilling
-description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking or mentions grilling.
 ---
+
+Interview me relentlessly about every aspect of this until we reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+
+Ask the questions one at a time, waiting for feedback on each question before continuing.
+
+If a *fact* can be found by exploring the environment (filesystem, tools, etc.), look it up rather than asking me. The *decisions*, though, are mine — put each one to me and wait for my answer.
+
+Do not act on it until I confirm we have reached a shared understanding.
+
+Follow the wizard flow described below for how to interact with me. 
 
 ## Grilling Wizard Flow
 
-The grilling skill now uses the Maestro server's interactive wizard page (`/grill/{id}`) instead of plain chat-based Q&A.
 
 ### 1. Start the Maestro server
 
@@ -16,10 +25,14 @@ The server should be available at `http://localhost:8080`.
 
 Create a new plan by POSTing JSON to `/api/plans`. Pick a descriptive kebab-case ID.
 
-```bash
-curl -s -X POST "http://localhost:$port/api/plans" \
-  -H "Content-Type: application/json" \
-  -d '{"id": "{session-id}", "title": "Grilling Session — {topic}", "summary": "Interactive grilling session about {topic}"}'
+POST JSON to `/api/plans`:
+
+```json
+{
+  "id": "{session-id}",
+  "title": "Grilling Session — {topic}",
+  "summary": "Interactive grilling session about {topic}"
+}
 ```
 
 The server creates the plan and returns it as JSON. No file writes needed.
@@ -91,7 +104,12 @@ When you detect the human has responded to your previous question:
 
 **Then**, post the next question as a new agent message with a fresh prompt (answered: false).
 
-### 7. When all questions resolved
+### 7. Confirm shared understanding
+
+Before finalizing, ask the user: **"Do you feel all branches are exhausted? Do we have a shared understanding?"**
+Wait for explicit confirmation before proceeding.
+
+### 8. When all questions resolved
 
 When the grilling session is complete and all decisions have been made:
 1. Write the updated plan file (JSON) with populated `decision` modules:
@@ -104,20 +122,9 @@ When the grilling session is complete and all decisions have been made:
 
 The wizard page detects the changed state and redirects to `/plan/{id}` so the user can review the generated decision modules.
 
-### 8. User reviews at /plan/{id}
+### 9. User reviews at /plan/{id}
 
 The user reviews the generated plan with decision modules, discussion history, and structured plan content.
 The user approves when satisfied by clicking "Approve Plan" on the plan page.
 
-### Summary of API Calls
-
-| Step | Method | Endpoint | Purpose |
-|------|--------|----------|---------|
-| 1 | — | Start server | Ensure Maestro is running |
-| 2 | POST | `/api/plans` | Create plan (JSON) |
-| 3 | Open browser | `/grill/{id}` | Show wizard |
-| 4 | POST | `/api/plan/{id}/messages` | Post question with prompt |
-| 5 | POST | `/api/agent/{id}/heartbeat` | Keep agent alive |
-| 6 | POST | `/api/plan/{id}/messages` | Mark answered + next question |
-| 7 | Write file | `$MAESTRO_PLANS_DIR/{id}.toon` | Populate decisions (JSON) |
-| 8 | Open browser | `/plan/{id}` | User reviews plan |
+For a quick-reference summary of all API calls used in this flow, see [API_REFERENCE.md](API_REFERENCE.md).
