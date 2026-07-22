@@ -247,6 +247,35 @@ func (s *PlanStore) DeletePlan(id string) error {
 	return nil
 }
 
+// CreatePlan creates a new plan with the given title and summary, persists it,
+// and returns the created plan. Uses a kebab-case ID derived from the title.
+func (s *PlanStore) CreatePlan(id, title, summary string) (*Plan, error) {
+	s.mu.Lock()
+	if _, ok := s.plans[id]; ok {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("plan already exists: %s", id)
+	}
+
+	plan := &Plan{
+		Title:   title,
+		Summary: summary,
+		State:   "draft",
+	}
+	s.plans[id] = plan
+	s.mu.Unlock()
+
+	if err := s.persistPlan(id); err != nil {
+		s.mu.Lock()
+		delete(s.plans, id)
+		s.mu.Unlock()
+		return nil, err
+	}
+	if s.onChange != nil {
+		s.onChange(id)
+	}
+	return plan, nil
+}
+
 // RemovePlan removes a plan from in-memory store without touching disk.
 // Used when the file was already deleted externally (e.g., via file watcher).
 func (s *PlanStore) RemovePlan(id string) {

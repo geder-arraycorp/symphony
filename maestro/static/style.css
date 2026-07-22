@@ -2106,8 +2106,8 @@ body.edit-mode .toolbar-edit {
 .wizard-options {
 	display: flex;
 	flex-direction: column;
-	gap: 1px;
-	background: var(--color-border-light);
+	gap: var(--space-sm);
+	padding: var(--space-lg);
 	border-top: 1px solid var(--color-border-light);
 }
 
@@ -2121,9 +2121,10 @@ body.edit-mode .toolbar-edit {
 	font-weight: 400;
 	color: var(--color-text);
 	background: var(--color-surface);
-	border: none;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
 	cursor: pointer;
-	transition: all var(--transition-fast);
+	transition: all 0.15s ease;
 	line-height: 1.5;
 	position: relative;
 }
@@ -2131,11 +2132,14 @@ body.edit-mode .toolbar-edit {
 .wizard-option-btn:hover {
 	background: var(--color-accent-bg);
 	color: var(--color-accent);
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--color-accent-bg);
 }
 
 .wizard-option-btn.selected {
 	background: var(--color-accent-bg);
 	color: var(--color-accent);
+	border-color: var(--color-accent);
 	font-weight: 500;
 }
 
@@ -2147,6 +2151,8 @@ body.edit-mode .toolbar-edit {
 .wizard-option-btn:disabled:hover {
 	background: var(--color-surface);
 	color: var(--color-text);
+	border-color: var(--color-border);
+	box-shadow: none;
 }
 
 /* ── Custom Input ── */
