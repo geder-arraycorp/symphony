@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -63,6 +66,176 @@ func TestDecodePlan_DecisionModule(t *testing.T) {
 	}
 }
 
+const promptPlan = `title: Prompt Test
+summary: exercises prompt-bearing agent messages
+
+modules[1]:
+  - type: questions
+    heading: Open Questions
+    items[2]{text}:
+      which database should we use
+      what deployment strategy do you prefer
+state: draft
+
+messages[2]:
+  - role: agent
+    text: Which database engine would you prefer for this project?
+    prompt:
+      question_key: db-choice
+      options[3]: PostgreSQL, SQLite, MySQL
+      allow_custom: true
+      total_questions: 3
+  - role: human
+    text: PostgreSQL`
+
+func TestDecodePlan_WithPrompt(t *testing.T) {
+	plan, err := decodePlan([]byte(promptPlan))
+	if err != nil {
+		t.Fatalf("decodePlan: %v", err)
+	}
+	if len(plan.Messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(plan.Messages))
+	}
+	m := plan.Messages[0]
+	if m.Role != "agent" {
+		t.Errorf("expected agent role, got %q", m.Role)
+	}
+	if m.Prompt == nil {
+		t.Fatal("expected prompt to be non-nil")
+	}
+	if m.Prompt.QuestionKey != "db-choice" {
+		t.Errorf("expected question_key 'db-choice', got %q", m.Prompt.QuestionKey)
+	}
+	if !m.Prompt.AllowCustom {
+		t.Error("expected allow_custom to be true")
+	}
+	if len(m.Prompt.Options) != 3 {
+		t.Errorf("expected 3 options, got %d", len(m.Prompt.Options))
+	}
+	if m.Prompt.TotalQuestions != 3 {
+		t.Errorf("expected total_questions=3, got %d", m.Prompt.TotalQuestions)
+	}
+	if m.Prompt.Answered {
+		t.Error("expected answered=false")
+	}
+	if plan.Messages[1].Role != "human" {
+		t.Errorf("expected second message role 'human', got %q", plan.Messages[1].Role)
+	}
+}
+
+func TestPlan_JSONRoundTrip_WithPrompt(t *testing.T) {
+	plan := &Plan{
+		Title:   "Prompt Serialize",
+		Summary: "Round-trip test",
+		State:   "draft",
+		Messages: []Message{
+			{
+				ID:   "msg_abc",
+				Role: "agent",
+				Text: "Which database?",
+				Prompt: &Prompt{
+					QuestionKey:    "db-choice",
+					Options:        []string{"PostgreSQL", "SQLite"},
+					AllowCustom:    true,
+					TotalQuestions: 2,
+					Answered:       false,
+				},
+			},
+			{
+				ID:   "msg_def",
+				Role: "human",
+				Text: "PostgreSQL",
+			},
+		},
+	}
+	b, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded Plan
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(decoded.Messages) != 2 {
+		t.Fatalf("expected 2 messages after round-trip, got %d", len(decoded.Messages))
+	}
+	m0 := decoded.Messages[0]
+	if m0.Prompt == nil {
+		t.Fatal("prompt lost during round-trip")
+	}
+	if m0.Prompt.QuestionKey != "db-choice" {
+		t.Errorf("question_key mismatch: got %q", m0.Prompt.QuestionKey)
+	}
+	if len(m0.Prompt.Options) != 2 {
+		t.Errorf("options length mismatch: got %d", len(m0.Prompt.Options))
+	}
+}
+
+func TestAddMessage_WithPrompt(t *testing.T) {
+	dir := t.TempDir()
+	// Create a plan file first
+	planContent := `title: Prompt Msg Test
+summary: testing AddMessage with prompt
+
+modules[1]:
+  - type: notes
+    heading: Notes
+    items[1]{text}:
+      placeholder
+state: draft`
+	if err := os.WriteFile(filepath.Join(dir, "promptmsg.toon"), []byte(planContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	store := NewPlanStore(dir, nil)
+	store.LoadAll()
+
+	plan := store.Get("promptmsg")
+	if plan == nil {
+		t.Fatal("plan not found after LoadAll")
+	}
+
+	prompt := &Prompt{
+		QuestionKey:    "env-choice",
+		Options:        []string{"staging", "production"},
+		AllowCustom:    false,
+		TotalQuestions: 1,
+	}
+	msg, err := store.AddMessage("promptmsg", "agent", "Which environment?", "", prompt)
+	if err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+	if msg.Prompt == nil {
+		t.Fatal("prompt was nil in returned message")
+	}
+	if msg.Prompt.QuestionKey != "env-choice" {
+		t.Errorf("expected question_key 'env-choice', got %q", msg.Prompt.QuestionKey)
+	}
+	if len(msg.Prompt.Options) != 2 {
+		t.Errorf("expected 2 options, got %d", len(msg.Prompt.Options))
+	}
+	if msg.Prompt.TotalQuestions != 1 {
+		t.Errorf("expected total_questions=1, got %d", msg.Prompt.TotalQuestions)
+	}
+
+	// Verify persisted round-trip — reload from disk
+	store2 := NewPlanStore(dir, nil)
+	store2.LoadAll()
+	plan2 := store2.Get("promptmsg")
+	if plan2 == nil {
+		t.Fatal("plan not found after reload")
+	}
+	if len(plan2.Messages) != 1 {
+		t.Fatalf("expected 1 message after reload, got %d", len(plan2.Messages))
+	}
+	m2 := plan2.Messages[0]
+	if m2.Prompt == nil {
+		t.Fatal("prompt lost during persist round-trip")
+	}
+	if m2.Prompt.QuestionKey != "env-choice" {
+		t.Errorf("question_key mismatch after reload: got %q", m2.Prompt.QuestionKey)
+	}
+}
+
 func TestFlatPlan_PreservesDecisionFields(t *testing.T) {
 	plan := &Plan{
 		Title: "Flat Decision Test",
@@ -86,5 +259,45 @@ func TestFlatPlan_PreservesDecisionFields(t *testing.T) {
 	}
 	if it.Rationale != "X is faster" {
 		t.Errorf("flat item lost rationale: got %q", it.Rationale)
+	}
+}
+
+func TestFlatPlan_PreservesPromptMessages(t *testing.T) {
+	plan := &Plan{
+		Title: "Flat Prompt Test",
+		Messages: []Message{
+			{
+				ID:   "msg_abc",
+				Role: "agent",
+				Text: "Which database?",
+				Prompt: &Prompt{
+					QuestionKey:    "db-choice",
+					Options:        []string{"PostgreSQL", "SQLite"},
+					AllowCustom:    true,
+					TotalQuestions: 2,
+					Answered:       false,
+				},
+			},
+		},
+	}
+	fp := toFlatPlan(plan, "listening")
+	if len(fp.Messages) != 1 {
+		t.Fatalf("expected 1 message in flat plan, got %d", len(fp.Messages))
+	}
+	m := fp.Messages[0]
+	if m.Prompt == nil {
+		t.Fatal("prompt lost in FlatPlan conversion")
+	}
+	if m.Prompt.QuestionKey != "db-choice" {
+		t.Errorf("question_key mismatch: got %q", m.Prompt.QuestionKey)
+	}
+	if len(m.Prompt.Options) != 2 {
+		t.Errorf("expected 2 options, got %d", len(m.Prompt.Options))
+	}
+	if !m.Prompt.AllowCustom {
+		t.Error("expected allow_custom=true")
+	}
+	if m.Prompt.TotalQuestions != 2 {
+		t.Errorf("expected total_questions=2, got %d", m.Prompt.TotalQuestions)
 	}
 }
