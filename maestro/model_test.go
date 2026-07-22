@@ -66,27 +66,37 @@ func TestDecodePlan_DecisionModule(t *testing.T) {
 	}
 }
 
-const promptPlan = `title: Prompt Test
-summary: exercises prompt-bearing agent messages
-
-modules[1]:
-  - type: questions
-    heading: Open Questions
-    items[2]{text}:
-      which database should we use
-      what deployment strategy do you prefer
-state: draft
-
-messages[2]:
-  - role: agent
-    text: Which database engine would you prefer for this project?
-    prompt:
-      question_key: db-choice
-      options[3]: PostgreSQL, SQLite, MySQL
-      allow_custom: true
-      total_questions: 3
-  - role: human
-    text: PostgreSQL`
+const promptPlan = `{
+  "title": "Prompt Test",
+  "summary": "exercises prompt-bearing agent messages",
+  "state": "draft",
+  "modules": [
+    {
+      "type": "questions",
+      "heading": "Open Questions",
+      "items": [
+        {"text": "which database should we use"},
+        {"text": "what deployment strategy do you prefer"}
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "role": "agent",
+      "text": "Which database engine would you prefer for this project?",
+      "prompt": {
+        "question_key": "db-choice",
+        "options": ["PostgreSQL", "SQLite", "MySQL"],
+        "allow_custom": true,
+        "total_questions": 3
+      }
+    },
+    {
+      "role": "human",
+      "text": "PostgreSQL"
+    }
+  ]
+}`
 
 func TestDecodePlan_WithPrompt(t *testing.T) {
 	plan, err := decodePlan([]byte(promptPlan))
@@ -174,16 +184,21 @@ func TestPlan_JSONRoundTrip_WithPrompt(t *testing.T) {
 func TestAddMessage_WithPrompt(t *testing.T) {
 	dir := t.TempDir()
 	// Create a plan file first
-	planContent := `title: Prompt Msg Test
-summary: testing AddMessage with prompt
-
-modules[1]:
-  - type: notes
-    heading: Notes
-    items[1]{text}:
-      placeholder
-state: draft`
-	if err := os.WriteFile(filepath.Join(dir, "promptmsg.toon"), []byte(planContent), 0644); err != nil {
+	planContent := `{
+  "title": "Prompt Msg Test",
+  "summary": "testing AddMessage with prompt",
+  "state": "draft",
+  "modules": [
+    {
+      "type": "notes",
+      "heading": "Notes",
+      "items": [
+        {"text": "placeholder"}
+      ]
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, "promptmsg.json"), []byte(planContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 	store := NewPlanStore(dir, nil)

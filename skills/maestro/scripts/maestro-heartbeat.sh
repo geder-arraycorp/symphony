@@ -9,7 +9,7 @@ HELP_MESSAGE="Usage: maestro-heartbeat.sh --plan-name <name> [options]
   or the parent process (agent/shell) exits.
   Saves its PID to a file so subsequent invocations reuse the same process.
 
-  --plan-name <name>        Plan name (required, matches .toon filename without extension)
+  --plan-name <name>        Plan name (required, matches .json filename without extension)
   --plan-id <name>          Alias for --plan-name
   --maestro-dir <path>      Path to maestro directory (default: MAESTRO_DIR env or .)
   --port <port>             Maestro server port (default: 8080)

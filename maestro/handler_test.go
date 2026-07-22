@@ -17,16 +17,21 @@ func setUpTestHandler(t *testing.T) (*PlanStore, *AgentState, *http.ServeMux) {
 	t.Helper()
 
 	dir := t.TempDir()
-	planContent := `title: Handler Test
-summary: handler-level prompt test
-
-modules[1]:
-  - type: notes
-    heading: Notes
-    items[1]{text}:
-      placeholder
-state: draft`
-	if err := os.WriteFile(filepath.Join(dir, "handler-test.toon"), []byte(planContent), 0644); err != nil {
+	planContent := `{
+  "title": "Handler Test",
+  "summary": "handler-level prompt test",
+  "state": "draft",
+  "modules": [
+    {
+      "type": "notes",
+      "heading": "Notes",
+      "items": [
+        {"text": "placeholder"}
+      ]
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, "handler-test.json"), []byte(planContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
