@@ -1,0 +1,141 @@
+{
+  "title": "Maestro Module Showcase",
+  "summary": "A comprehensive example exercising every module type the Maestro planning server supports. Use this file as a visual regression test and reference for plan authors.",
+  "state": "draft",
+  "modules": [
+    {
+      "type": "criteria",
+      "heading": "Acceptance Criteria",
+      "items": [
+        {"text": "Every module type renders without visual defects"},
+        {"text": "All interactive elements (checkboxes, links, message threading) function correctly"},
+        {"text": "Mobile layout does not break for any module type"},
+        {"text": "Empty items lists degrade gracefully with a placeholder message"}
+      ]
+    },
+    {
+      "type": "steps",
+      "heading": "Implementation Steps",
+      "items": [
+        {"text": "Review the module type catalog and schema definitions", "owner": "dev-lead", "status": "done"},
+        {"text": "Create JSON plan fixture covering all nine types", "owner": "qa-team", "status": "in-progress"},
+        {"text": "Verify each template renders against this fixture", "owner": "qa-team", "status": "pending"},
+        {"text": "Test grilling wizard prompt display and option interaction", "owner": "qa-team", "status": "pending"},
+        {"text": "Run cross-browser visual snapshots and document any gaps", "owner": "qa-team", "status": "blocked"}
+      ]
+    },
+    {
+      "type": "risks",
+      "heading": "Risks",
+      "items": [
+        {
+          "text": "A new module type is added to the schema but forgotten in the template dispatcher",
+          "severity": "high",
+          "impact": "New module falls through to the generic renderer, missing its custom UI",
+          "mitigation": "Keep this fixture exhaustive — add a module for every registered type so the gap is caught visually"
+        },
+        {
+          "text": "Column key changes in the model break the table template",
+          "severity": "medium",
+          "impact": "Table cells render empty because the Go field name no longer matches the key switch",
+          "mitigation": "This fixture includes a table module with all known column keys; any mismatch surfaces during review"
+        },
+        {
+          "text": "TOON encoding round-trips drop optional fields",
+          "severity": "low",
+          "impact": "Fields like hideRowNum or rationale survive JSON but not the TOON→Plan path",
+          "mitigation": "Validate via automated round-trip test that compares the decoded Plan against the original JSON"
+        }
+      ]
+    },
+    {
+      "type": "assumptions",
+      "heading": "Assumptions",
+      "items": [
+        {"text": "The Maestro server is running against the standard plans directory"},
+        {"text": "All templates under templates/components/ are up to date with model.go"},
+        {"text": "The browser supports WebSocket for live reload during visual review"}
+      ]
+    },
+    {
+      "type": "changes",
+      "heading": "Files Changed",
+      "items": [
+        {"text": "maestro/plans/module-showcase.json", "type": "config"},
+        {"text": "maestro/plans/grilling-wizard-demo.json", "type": "config"},
+        {"text": "maestro/templates/components/module-table.html", "type": "template"},
+        {"text": "maestro/templates/components/plan-module.html", "type": "template"},
+        {"text": "maestro/model.go", "type": "source"},
+        {"text": "docs/maestro/module-reference.md", "type": "docs"}
+      ]
+    },
+    {
+      "type": "decision",
+      "heading": "Key Decisions",
+      "items": [
+        {
+          "text": "Include a table module in the showcase fixture",
+          "options": "skip table (simpler); include table (complete coverage)",
+          "rationale": "The table type is the only module that uses the Module-level Columns field and HideRowNum flag. Excluding it would leave a gap in template coverage."
+        },
+        {
+          "text": "Store showcase and grilling-demo as separate plan files",
+          "options": "single combined file; two separate files",
+          "rationale": "The grilling wizard demo needs a message thread with prompt payloads, which is a fundamentally different document shape. Two files keep each focused and make it obvious which features each one exercises."
+        }
+      ]
+    },
+    {
+      "type": "notes",
+      "heading": "Notes",
+      "items": [
+        {"text": "The table module is the only type that reads from Module.Columns and Module.HideRowNum — all other types work purely with Item fields."},
+        {"text": "The changes module uses JSON key \"type\" which maps to Go field ChangeType. The FlatItem/FlatPlan serialization uses \"changeType\" to avoid colliding with the module-level \"type\" key."},
+        {"text": "If a new module type is added to model.go, it must also get a case in plan-module.html's dispatcher or it will fall through to module-generic."}
+      ]
+    },
+    {
+      "type": "questions",
+      "heading": "Open Questions",
+      "items": [
+        {
+          "text": "Should the table module support inline editing of cell values?",
+          "answered": true,
+          "answer": "No — the plan page is read-only. Editing happens via the API."
+        },
+        {
+          "text": "Should we add a timeline / gantt module type for scheduling?",
+          "answered": false
+        },
+        {
+          "text": "Should the generic fallback renderer emit a console warning about the unknown type?",
+          "answered": true,
+          "answer": "Yes — a visible badge is better than silently rendering items without type-specific UI."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "heading": "Module Type Reference",
+      "hideRowNum": false,
+      "columns": [
+        {"heading": "Type", "key": "text"},
+        {"heading": "Severity", "key": "severity"},
+        {"heading": "Status", "key": "status"},
+        {"heading": "Owner", "key": "owner"},
+        {"heading": "Answered", "key": "answered"}
+      ],
+      "items": [
+        {"text": "criteria", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": false},
+        {"text": "steps", "severity": "n/a", "status": "pending", "owner": "dev-lead", "answered": false},
+        {"text": "risks", "severity": "high", "status": "n/a", "owner": "n/a", "answered": false},
+        {"text": "assumptions", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": false},
+        {"text": "changes", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": false},
+        {"text": "decision", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": false},
+        {"text": "notes", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": false},
+        {"text": "questions", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": true},
+        {"text": "table", "severity": "n/a", "status": "n/a", "owner": "n/a", "answered": false}
+      ]
+    }
+  ]
+}
