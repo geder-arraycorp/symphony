@@ -200,10 +200,20 @@
 		var optionsDiv = document.getElementById("wizard-options");
 		optionsDiv.innerHTML = "";
 		if (prompt.options && prompt.options.length > 0) {
-			prompt.options.forEach(function(opt) {
+			var recIdx = prompt.recommended ? (prompt.recommended - 1) : -1;
+			if (recIdx >= prompt.options.length) recIdx = -1;
+			prompt.options.forEach(function(opt, idx) {
 				var btn = document.createElement("button");
 				btn.className = "wizard-option-btn";
-				btn.textContent = opt;
+				if (idx === recIdx) {
+					btn.className += " recommended";
+					var badge = document.createElement("span");
+					badge.className = "wizard-option-recommended-badge";
+					badge.textContent = "Recommended";
+					btn.appendChild(badge);
+				}
+				var label = document.createTextNode(opt);
+				btn.appendChild(label);
 				btn.onclick = function() { submitOption(opt, this); };
 				optionsDiv.appendChild(btn);
 			});

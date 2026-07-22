@@ -25,6 +25,9 @@ type Prompt struct {
 	TotalQuestions int      `json:"total_questions,omitempty"`
 	Answered       bool     `json:"answered"`
 	Answer         string   `json:"answer,omitempty"`
+	// Recommended is a 1-based index into Options indicating the agent's
+	// recommended choice. 0 means no recommendation.
+	Recommended int `json:"recommended,omitempty"`
 }
 
 // Message is a single entry in the plan's conversation thread.

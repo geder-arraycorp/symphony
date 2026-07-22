@@ -2155,6 +2155,27 @@ body.edit-mode .toolbar-edit {
 	box-shadow: none;
 }
 
+.wizard-option-btn.recommended {
+	border-color: var(--color-accent);
+	background: var(--color-accent-bg);
+}
+
+.wizard-option-recommended-badge {
+	position: absolute;
+	top: 4px;
+	right: 8px;
+	font-size: 0.65rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--color-accent);
+	background: var(--color-accent-bg);
+	border: 1px solid rgba(88, 166, 255, 0.25);
+	padding: 0.15em 0.5em;
+	border-radius: 10px;
+	pointer-events: none;
+}
+
 /* ── Custom Input ── */
 
 .wizard-custom {

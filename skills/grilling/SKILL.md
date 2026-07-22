@@ -3,7 +3,7 @@ name: grilling
 description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking or mentions grilling.
 ---
 
-Interview me relentlessly about every aspect of this until we reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+Interview me relentlessly about every aspect of this until we reach a shared understanding. Walk down each branch of the decision tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer. Always include a `recommended` index (1-based) in every prompt to highlight your recommended choice in the wizard UI.
 
 Ask the questions one at a time, waiting for feedback on each question before continuing.
 
@@ -55,7 +55,8 @@ For each question, POST a message to `/api/plan/{id}/messages` with an agent rol
     "options": ["AWS RDS", "Self-hosted PostgreSQL", "CockroachDB"],
     "allow_custom": true,
     "total_questions": 5,
-    "answered": false
+    "answered": false,
+    "recommended": 1
   }
 }
 ```
@@ -67,6 +68,7 @@ For each question, POST a message to `/api/plan/{id}/messages` with an agent rol
 - `total_questions` (int, optional) — display progress badge like "Q 1/5"
 - `answered` (bool, **ALWAYS set to `false`** when posting a new question)
 - `answer` (string, omit when posting, only set when marking as answered)
+- `recommended` (int, required) — 1-based index into `options` of the agent's recommended choice. 0 means no recommendation (should not be used per skill mandate).
 
 The wizard will automatically detect unanswered prompts (scanning newest-first) and render the current question as a centered card with clickable option buttons.
 
