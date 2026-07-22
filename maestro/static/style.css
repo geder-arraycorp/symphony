@@ -2028,5 +2028,333 @@ body.edit-mode .toolbar-edit {
 	background: #b71c1c;
 	box-shadow: var(--color-shadow-sm);
 }
-r-shadow-sm);
+
+/* ── Grilling Wizard ── */
+
+.wizard-container {
+	display: flex;
+	justify-content: center;
+	padding: var(--space-xl) 0;
+}
+
+.wizard-main {
+	width: 100%;
+	max-width: 640px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xl);
+}
+
+/* ── Prompt Card ── */
+
+.wizard-prompt-card {
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	box-shadow: var(--color-shadow-md);
+	animation: wizardIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes wizardIn {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.wizard-prompt-header {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	padding: var(--space-lg) var(--space-lg) 0;
+}
+
+.wizard-prompt-title {
+	flex: 1;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--color-text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin: 0;
+}
+
+.wizard-prompt-badge {
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--color-accent);
+	background: var(--color-accent-bg);
+	padding: 0.25em 0.65em;
+	border-radius: 20px;
+	border: 1px solid rgba(88,166,255,0.2);
+	white-space: nowrap;
+}
+
+.wizard-prompt-text {
+	margin: var(--space-md) var(--space-lg) var(--space-lg);
+	font-size: 1.15rem;
+	font-weight: 500;
+	line-height: 1.6;
+	color: var(--color-text);
+}
+
+.wizard-options {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	background: var(--color-border-light);
+	border-top: 1px solid var(--color-border-light);
+}
+
+.wizard-option-btn {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: var(--space-md) var(--space-lg);
+	font-family: inherit;
+	font-size: 1rem;
+	font-weight: 400;
+	color: var(--color-text);
+	background: var(--color-surface);
+	border: none;
+	cursor: pointer;
+	transition: all var(--transition-fast);
+	line-height: 1.5;
+	position: relative;
+}
+
+.wizard-option-btn:hover {
+	background: var(--color-accent-bg);
+	color: var(--color-accent);
+}
+
+.wizard-option-btn.selected {
+	background: var(--color-accent-bg);
+	color: var(--color-accent);
+	font-weight: 500;
+}
+
+.wizard-option-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.wizard-option-btn:disabled:hover {
+	background: var(--color-surface);
+	color: var(--color-text);
+}
+
+/* ── Custom Input ── */
+
+.wizard-custom {
+	padding: var(--space-md) var(--space-lg) var(--space-lg);
+	border-top: 1px solid var(--color-border-light);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm);
+}
+
+.wizard-custom-label {
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: var(--color-text-secondary);
+}
+
+.wizard-custom-input {
+	width: 100%;
+	padding: 0.6rem 0.75rem;
+	font-family: inherit;
+	font-size: 0.9rem;
+	line-height: 1.5;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	resize: vertical;
+	color: var(--color-text);
+	background: var(--color-surface);
+	transition: all var(--transition-fast);
+	min-height: 3rem;
+	box-sizing: border-box;
+}
+
+.wizard-custom-input:focus {
+	outline: none;
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 3px var(--color-accent-bg);
+}
+
+.wizard-custom-submit {
+	align-self: flex-end;
+	padding: 0.45rem 1rem;
+	font-size: 0.85rem;
+	font-weight: 500;
+	border: none;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: all var(--transition-fast);
+	background: var(--color-accent);
+	color: #fff;
+	line-height: 1.4;
+}
+
+.wizard-custom-submit:hover {
+	background: var(--color-accent-hover);
+	box-shadow: var(--color-shadow-sm);
+}
+
+.wizard-custom-submit:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* ── Sent / Waiting States ── */
+
+.wizard-sent-state,
+.wizard-waiting-state {
+	padding: var(--space-xl) var(--space-lg);
+	text-align: center;
+}
+
+.wizard-sent-state p,
+.wizard-waiting-state p {
+	margin: 0;
+	font-size: 0.95rem;
+	color: var(--color-text-secondary);
+}
+
+.wizard-sent-state p {
+	color: var(--color-success);
+	font-weight: 500;
+}
+
+.wizard-view-plan-link {
+	color: var(--color-accent);
+	font-weight: 600;
+	text-decoration: none;
+	margin-left: 0.5em;
+	white-space: nowrap;
+}
+
+.wizard-view-plan-link:hover {
+	text-decoration: underline;
+}
+
+/* ── History ── */
+
+.wizard-history {
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}
+
+.wizard-history-header {
+	padding: var(--space-md) var(--space-lg);
+	border-bottom: 1px solid var(--color-border-light);
+	background: var(--color-surface);
+}
+
+.wizard-history-title {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.wizard-history-list {
+	padding: 0;
+}
+
+.wizard-history-item {
+	border-bottom: 1px solid var(--color-border-light);
+}
+
+.wizard-history-item:last-child {
+	border-bottom: none;
+}
+
+.wizard-history-summary {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	padding: var(--space-sm) var(--space-lg);
+	cursor: pointer;
+	transition: background var(--transition-fast);
+	font-size: 0.88rem;
+}
+
+.wizard-history-summary:hover {
+	background: var(--color-surface-hover);
+}
+
+.wizard-history-q {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text);
+	font-weight: 500;
+}
+
+.wizard-history-arrow {
+	flex-shrink: 0;
+	color: var(--color-text-tertiary);
+	font-weight: 600;
+}
+
+.wizard-history-a {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-accent);
+}
+
+.wizard-history-toggle {
+	flex-shrink: 0;
+	color: var(--color-text-tertiary);
+	font-size: 0.75rem;
+	width: 16px;
+	text-align: center;
+}
+
+.wizard-history-detail {
+	padding: var(--space-sm) var(--space-lg) var(--space-md);
+	border-top: 1px solid var(--color-border-light);
+	background: var(--color-surface-hover);
+}
+
+.wizard-history-detail-q,
+.wizard-history-detail-a {
+	margin: 0 0 var(--space-xs);
+	font-size: 0.85rem;
+	line-height: 1.5;
+	color: var(--color-text);
+}
+
+.wizard-history-detail-q strong,
+.wizard-history-detail-a strong {
+	color: var(--color-text-secondary);
+	font-weight: 500;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 800px) {
+	.wizard-main {
+		max-width: 100%;
+	}
+
+	.wizard-prompt-text {
+		font-size: 1.05rem;
+	}
+
+	.wizard-option-btn {
+		font-size: 0.95rem;
+	}
 }

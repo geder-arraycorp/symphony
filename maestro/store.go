@@ -131,7 +131,7 @@ func (s *PlanStore) persistPlan(id string) error {
 }
 
 // AddMessage appends a message to the plan's conversation thread and persists.
-func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error) {
+func (s *PlanStore) AddMessage(id, role, text, itemRef string, prompt *Prompt) (*Message, error) {
 	s.mu.Lock()
 
 	plan, ok := s.plans[id]
@@ -145,6 +145,7 @@ func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error)
 		Role:      role,
 		Text:      text,
 		ItemRef:   itemRef,
+		Prompt:    prompt,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	plan.Messages = append(plan.Messages, msg)
@@ -159,9 +160,16 @@ func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error)
 	return &msg, nil
 }
 
+// MsgEntry holds a single entry for batch message addition.
+type MsgEntry struct {
+	Text    string
+	ItemRef string
+	Prompt  *Prompt
+}
+
 // AddMessages appends multiple messages to the plan's conversation thread atomically,
 // persists once, and triggers a single broadcast.
-func (s *PlanStore) AddMessages(id, role string, entries []struct{ Text, ItemRef string }) ([]Message, error) {
+func (s *PlanStore) AddMessages(id, role string, entries []MsgEntry) ([]Message, error) {
 	s.mu.Lock()
 
 	plan, ok := s.plans[id]
@@ -181,6 +189,7 @@ func (s *PlanStore) AddMessages(id, role string, entries []struct{ Text, ItemRef
 			Role:      role,
 			Text:      e.Text,
 			ItemRef:   e.ItemRef,
+			Prompt:    e.Prompt,
 			CreatedAt: now,
 		}
 		plan.Messages = append(plan.Messages, msg)

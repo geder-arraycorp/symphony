@@ -108,6 +108,27 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/plan.html"), data)
 	})
 
+	// Grilling wizard page
+	http.HandleFunc("/grill/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/grill/")
+		if id == "" {
+			http.NotFound(w, r)
+			return
+		}
+		plan := store.Get(id)
+		if plan == nil {
+			http.NotFound(w, r)
+			return
+		}
+		data := PlanPageData{
+			Title:  plan.Title,
+			Year:   2026,
+			Plan:   plan,
+			PlanID: id,
+		}
+		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/grill.html"), data)
+	})
+
 	// API: list plans
 	http.HandleFunc("/api/plans", func(w http.ResponseWriter, r *http.Request) {
 		plans := store.List()
@@ -151,7 +172,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 					http.NotFound(w, r)
 					return
 				}
-								fp := toFlatPlan(plan, agentState.GetStatus(parts[0]))
+				fp := toFlatPlan(plan, agentState.GetStatus(parts[0]))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				w.Write(fp.JSON())
@@ -171,12 +192,13 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 				}
 				r.Body.Close()
 
-				// Try batch format first: { messages: [{ role, text, item_ref }, ...] }
+				// Try batch format first: { messages: [{ role, text, item_ref, prompt }, ...] }
 				var batchBody struct {
 					Messages []struct {
-						Role    string `json:"role"`
-						Text    string `json:"text"`
-						ItemRef string `json:"item_ref,omitempty"`
+						Role    string  `json:"role"`
+						Text    string  `json:"text"`
+						ItemRef string  `json:"item_ref,omitempty"`
+						Prompt  *Prompt `json:"prompt,omitempty"`
 					} `json:"messages"`
 				}
 				if err := json.Unmarshal(bodyBytes, &batchBody); err == nil && len(batchBody.Messages) > 1 {
@@ -186,7 +208,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 						http.Error(w, "role must be 'agent' or 'human'", http.StatusBadRequest)
 						return
 					}
-					entries := make([]struct{ Text, ItemRef string }, 0, len(batchBody.Messages))
+					entries := make([]MsgEntry, 0, len(batchBody.Messages))
 					for _, m := range batchBody.Messages {
 						if m.Role != role {
 							http.Error(w, "all messages in a batch must have the same role", http.StatusBadRequest)
@@ -196,7 +218,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 							http.Error(w, "text is required for all messages", http.StatusBadRequest)
 							return
 						}
-						entries = append(entries, struct{ Text, ItemRef string }{m.Text, m.ItemRef})
+						entries = append(entries, MsgEntry{Text: m.Text, ItemRef: m.ItemRef, Prompt: m.Prompt})
 					}
 
 					msgs, err := store.AddMessages(msgID, role, entries)
@@ -218,11 +240,12 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 					return
 				}
 
-				// Single message: { role, text, item_ref }
+				// Single message: { role, text, item_ref, prompt }
 				var single struct {
-					Role    string `json:"role"`
-					Text    string `json:"text"`
-					ItemRef string `json:"item_ref,omitempty"`
+					Role    string  `json:"role"`
+					Text    string  `json:"text"`
+					ItemRef string  `json:"item_ref,omitempty"`
+					Prompt  *Prompt `json:"prompt,omitempty"`
 				}
 				if err := json.Unmarshal(bodyBytes, &single); err != nil {
 					http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -236,7 +259,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 					http.Error(w, "text is required", http.StatusBadRequest)
 					return
 				}
-				msg, err := store.AddMessage(msgID, single.Role, single.Text, single.ItemRef)
+				msg, err := store.AddMessage(msgID, single.Role, single.Text, single.ItemRef, single.Prompt)
 				if err != nil {
 					log.Printf("add message error: %v", err)
 					http.Error(w, "internal error", http.StatusInternalServerError)
