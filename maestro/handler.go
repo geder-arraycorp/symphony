@@ -129,8 +129,33 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/grill.html"), data)
 	})
 
-	// API: list plans
+	// API: list plans (GET) or create plan (POST)
 	http.HandleFunc("/api/plans", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var body struct {
+				ID      string `json:"id"`
+				Title   string `json:"title"`
+				Summary string `json:"summary"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			if body.ID == "" || body.Title == "" {
+				http.Error(w, "id and title are required", http.StatusBadRequest)
+				return
+			}
+			plan, err := store.CreatePlan(body.ID, body.Title, body.Summary)
+			if err != nil {
+				log.Printf("create plan error: %v", err)
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(toFlatPlan(plan, "listening"))
+			return
+		}
 		plans := store.List()
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(plans); err != nil {

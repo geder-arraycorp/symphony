@@ -12,27 +12,17 @@ The grilling skill now uses the Maestro server's interactive wizard page (`/gril
 Ensure the Maestro server is running. Start it if needed.
 The server should be available at `http://localhost:8080`.
 
-### 2. Create a plan file
+### 2. Create a plan via API
 
-Create a new JSON plan file in the `$MAESTRO_PLANS_DIR` directory (default: `plans/`).
-Give it a descriptive ID (kebab-case) and name it `{id}.toon`.
+Create a new plan by POSTing JSON to `/api/plans`. Pick a descriptive kebab-case ID.
 
-The plan should start with minimal content — just a title, summary, and a `questions` module for tracking resolved questions. Example:
-
-```
-title: Grilling Session — {topic}
-summary: Interactive grilling session about {topic}
-
-modules[1]:
-  - type: questions
-    heading: Decision Points
-    items[]:
-
-state: draft
+```bash
+curl -s -X POST "http://localhost:$port/api/plans" \
+  -H "Content-Type: application/json" \
+  -d '{"id": "{session-id}", "title": "Grilling Session — {topic}", "summary": "Interactive grilling session about {topic}"}'
 ```
 
-**Important**: Convert this to TOON format (using the `toon` library) when writing the plan file.
-Write the file to `$MAESTRO_PLANS_DIR/{id}.toon` and wait for the server to detect it.
+The server creates the plan and returns it as JSON. No file writes needed.
 
 ### 3. Open the wizard page
 
@@ -104,13 +94,13 @@ When you detect the human has responded to your previous question:
 ### 7. When all questions resolved
 
 When the grilling session is complete and all decisions have been made:
-1. Populate `decision` modules in the plan with the resolved answers:
+1. Write the updated plan file (JSON) with populated `decision` modules:
    - `text` — the decision that was made
    - `options` — alternatives that were considered
    - `rationale` — reasoning derived from the grilling answers
 2. Optionally, update the `questions` module items to mark things as resolved
-3. Set the plan state to `draft` (do NOT approve — the user approves on their own)
-4. Persist the updated plan file
+3. Set the plan state to `draft` via `POST /api/plan/{id}/state` (do NOT approve)
+4. Force reload via `POST /api/admin/reload` so the server picks up the module changes
 
 The wizard page detects the changed state and redirects to `/plan/{id}` so the user can review the generated decision modules.
 
@@ -124,10 +114,10 @@ The user approves when satisfied by clicking "Approve Plan" on the plan page.
 | Step | Method | Endpoint | Purpose |
 |------|--------|----------|---------|
 | 1 | — | Start server | Ensure Maestro is running |
-| 2 | Write file | `$MAESTRO_PLANS_DIR/{id}.toon` | Create plan |
+| 2 | POST | `/api/plans` | Create plan (JSON) |
 | 3 | Open browser | `/grill/{id}` | Show wizard |
 | 4 | POST | `/api/plan/{id}/messages` | Post question with prompt |
 | 5 | POST | `/api/agent/{id}/heartbeat` | Keep agent alive |
 | 6 | POST | `/api/plan/{id}/messages` | Mark answered + next question |
-| 7 | Update file | `$MAESTRO_PLANS_DIR/{id}.toon` | Populate decisions |
+| 7 | Write file | `$MAESTRO_PLANS_DIR/{id}.toon` | Populate decisions (JSON) |
 | 8 | Open browser | `/plan/{id}` | User reviews plan |
