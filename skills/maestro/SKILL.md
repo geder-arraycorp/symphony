@@ -177,6 +177,18 @@ The server drives `listening`/`thinking` automatically from message roles; the a
 
 Done when: `GET /api/plan/{id}` returns the plan.
 
+## Grilling Interview Phase
+
+After authoring the plan (and before or during the feedback session), the agent SHOULD actively interview the user to stress-test the plan.
+This is **not** a passive review — the agent asks clarifying questions via maestro messages, one at a time, and updates the plan with the answers.
+
+- Use the **grilling** skill to drive this phase: ask probing questions about decisions, risks, assumptions, and trade-offs.
+- Walk down each branch of the decision tree, resolving dependencies one-by-one.
+- Update the plan via PATCH as each question is resolved.
+- Continue until the user confirms a shared understanding.
+
+The interview flow is: **plan created → grilling interview (agent asks questions, updates plan) → display for final review → approval → export → stop**.
+
 ## Feedback Session Workflow
 
 After authoring a plan, run a feedback session so the user can review, comment, and approve before implementation begins.
@@ -302,11 +314,19 @@ When `plan.state == "approved"`:
 2. Post a final acknowledgment message.
 3. Stop the heartbeat: `scripts/maestro-heartbeat.sh --plan-name "{plan-name}" --port "$port" --stop`.
 4. Exit the listen loop.
-5. Proceed with implementation by entering the **plan-implementation-procedure** orchestration loop (implementer + reviewer subagents) on the approved plan.
+5. Ensure the work ticket directory exists:
+   ```bash
+   mkdir -p ~/.config/symphony/work_tickets
+   ```
+6. Use the **maestro-export** skill to convert the approved plan JSON to a standardized Markdown work ticket and save it to `~/.config/symphony/work_tickets/{plan-id}.md`.
+7. Report:
+   > Composer stage complete. Work ticket ready at `~/.config/symphony/work_tickets/{plan-id}.md`.
+   > Ready for implementation when you are.
+8. **STOP** — do **not** proceed to implementation. The user invokes implementation explicitly via "pip it" or "implement the plan".
 
 The server also sets the agent **offline** automatically after 1 minute with no heartbeat; setting it explicitly gives the user immediate feedback.
 
-Done when: the dot is offline, the heartbeat is stopped, the user has been acknowledged, and control has passed to the plan-implementation-procedure orchestration loop.
+Done when: the dot is offline, the heartbeat is stopped, the user has been acknowledged, the work ticket has been exported, and the agent has stopped.
 
 ### 7. Handle interruption
 
@@ -335,7 +355,7 @@ Done when: the user has chosen a path and you have acted on it.
       - POST /api/agent/{id}/status {"status":"offline"}.
       - Stop the heartbeat.
       - Post final acknowledgment.
-      - Break → proceed to the plan-implementation-procedure orchestration loop.
+       - Break → export work ticket via maestro-export → report path → stop (do NOT proceed to implementation).
    e. If interrupted → ask the user what to do.
    f. Goto 3a.
 ```

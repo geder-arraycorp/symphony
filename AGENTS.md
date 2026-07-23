@@ -1,8 +1,7 @@
 ---
-# description and alwaysApply are Cursor-specific frontmatter keys.
-# Other agent systems (Claude Code, Cline, Aider) ignore unknown frontmatter.
-description: Global baseline instructions for all agent sessions
-alwaysApply: true
+name: grilling
+description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+compatibility: opencode
 ---
 
 # Agent Instructions
@@ -40,10 +39,50 @@ When working in a repository with openwiki, read the OpenWiki quickstart first, 
 
 When you produce any substantive plan (architecture, design, implementation, refactor, or investigation), you MUST:
 
-1. **Format it as a Maestro plan document** — use the `maestro` skill's `.toon` format with appropriate module types (e.g., `steps` for sequential work, `risks` for trade-offs, `notes` for design rationale, `criteria` for acceptance criteria, `questions` for open decisions).
-2. **Serve it via the Maestro web UI** — start the server, write the `.toon` file to `$MAESTRO_PLANS_DIR`, and open the browser URL. If `$MAESTRO_PLANS_DIR` is unset, the server defaults to `plans` relative to the current working directory; the `setup` script exports `$MAESTRO_PLANS_DIR`, so ensure it is set before writing the file.
+1. **Format it as a Maestro plan document** — use the `maestro` skill's JSON plan format with appropriate module types (e.g., `steps` for sequential work, `risks` for trade-offs, `notes` for design rationale, `criteria` for acceptance criteria, `questions` for open decisions).
+2. **Serve it via the Maestro web UI** — start the server, write the plan JSON file to `$MAESTRO_PLANS_DIR`, and open the browser URL. If `$MAESTRO_PLANS_DIR` is unset, the server defaults to `plans` relative to the current working directory; the `setup` script exports `$MAESTRO_PLANS_DIR`, so ensure it is set before writing the file.
 3. **Enter the feedback loop** — enter the listening loop after the initial plan generation so the user can interact with the plan. See the `maestro` skill for the heartbeat cadence, listen endpoint, and exit conditions.
 
 This does NOT apply to: trivial 1-3 line responses, commit messages, or inline code comments. When in doubt, use Maestro.
 
 Direct text output of plan content is the wrong path — the listener should see it rendered in the browser with structured modules, discussion threading, and item-level commenting.
+
+## Symphony Skill Suite — Two-Stage Architecture
+
+The symphony skill suite separates planning from implementation into two distinct stages.
+They are **never** chained automatically — the user must explicitly invoke each stage.
+
+### Composer Stage (Planning)
+
+The composer stage is for creating, stress-testing, and approving plans.
+It **ends** when the plan is approved and a work ticket is exported.
+It does **not** proceed to implementation.
+
+Flow: **research → maestro plan creation → grilling interview → final review → approval → export work ticket → stop**
+
+Key skills:
+- `research` — gather facts and context for the plan
+- `maestro` — create and serve the structured plan, run the feedback loop, handle approval, and trigger the export
+- `grilling` — interview the user relentlessly about every aspect of the plan (one question at a time), resolving decisions one-by-one; this is the active interview phase within the maestro feedback session
+- `maestro-export` — convert the approved maestro plan JSON to a standardized Markdown work ticket
+
+Output: a Markdown work ticket at `~/.config/symphony/work_tickets/{plan-id}.md`
+
+### Performance Stage (Implementation)
+
+The performance stage is invoked **explicitly** by the user via "pip it" / "implement the plan" / "execute the plan".
+It reads the work ticket and enters an autonomous implementer↔reviewer loop.
+
+Flow: **read work ticket → implementer↔reviewer loop (max 3 iterations) → publish-it draft PR → stop**
+
+Key skills:
+- `plan-implementation-procedure` — orchestrates the implementer↔reviewer subagent loop against the work ticket
+- `publish-it` — creates a branch, commits, pushes, and opens a **draft** PR
+
+Input: a Markdown work ticket from `~/.config/symphony/work_tickets/{plan-id}.md` (fallback: maestro plan JSON)
+
+### Work Ticket Storage
+
+Work tickets are stored at `~/.config/symphony/work_tickets/{plan-id}.md`.
+The config directory is user-global (not per-project), so work tickets survive across projects and sessions.
+Each ticket is a clean, self-contained Markdown file with acceptance criteria, implementation steps, decisions, risks, and assumptions — suitable for copy-paste into Linear, Jira, or GitHub Issues.

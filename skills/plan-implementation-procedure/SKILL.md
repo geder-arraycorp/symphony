@@ -1,6 +1,6 @@
 ---
 name: plan-implementation-procedure
-description: Orchestrate an implementer↔reviewer subagent loop on an approved plan (max 3 iterations) until the reviewer is satisfied, then invoke publish-it to open a draft PR. Triggered by 'pip it', 'implement the plan', 'execute the plan', or automatically on maestro approval.
+description: Orchestrate an implementer↔reviewer subagent loop on a work ticket (max 3 iterations) until the reviewer is satisfied, then invoke publish-it to open a draft PR. Triggered by 'pip it', 'implement the plan', or 'execute the plan'.
 compatibility: opencode
 ---
 
@@ -18,20 +18,20 @@ The loop runs up to **3 iterations** (implementer → reviewer per iteration). I
 - pip this
 - implement the plan
 - execute the plan
-- (automatic) maestro plan approval
 
 ## Workflow
 
-### 0. Load the approved plan
+### 0. Load the approved work ticket
 
-Read the canonical approved plan:
+Read the canonical work ticket:
 
-- From a Maestro session: the `.toon` file at `$MAESTRO_PLANS_DIR/{plan-id}.toon` (parse its `modules` — especially `criteria` and `steps`).
-- For a standalone `pip it` (no Maestro): use the plan content already in context, or the plan file the user points to.
+- **Primary**: the Markdown work ticket at `~/.config/symphony/work_tickets/{plan-id}.md` (exported by the maestro composer stage).
+- **Fallback**: the maestro plan JSON at `$MAESTRO_PLANS_DIR/{plan-id}.json` (parse its `modules` — especially `criteria` and `steps`).
+- For a standalone `pip it` (no composer stage): use the plan content already in context, or the plan file the user points to.
 
 Extract the acceptance criteria and implementation steps; these are what the implementer works to and the reviewer checks against.
 
-Done when: the plan's criteria + steps are in hand to pass to subagents.
+Done when: the work ticket's criteria + steps are in hand to pass to subagents.
 
 ### 1. Branch check — do NOT branch
 
