@@ -9,15 +9,15 @@ compatibility: opencode
 Convert an approved maestro plan (JSON) into a clean, standardized Markdown work ticket suitable for the **Performance** (implementation) stage.
 The output is a self-contained `.md` file that can be copy-pasted into Linear, Jira, or GitHub Issues, and is read by the `plan-implementation-procedure` ("pip it") skill to drive the implementer↔reviewer orchestration loop.
 
-## Input
+## Workflow
 
-Read the approved maestro plan JSON from the maestro server's plan file (or the canonical `$MAESTRO_PLANS_DIR/{plan-id}.json` file).
-The plan must have `state: "approved"` — refuse to export a draft plan.
+1. Read the approved maestro plan JSON from `$MAESTRO_PLANS_DIR/{plan-id}.json`.
+   Refuse to export a draft plan — the plan must have `state: "approved"`.
+2. Convert each module to its markdown section following the rules below.
+3. Ensure `~/.config/symphony/work_tickets/` exists (`mkdir -p ~/.config/symphony/work_tickets`).
+4. Write the markdown to `~/.config/symphony/work_tickets/{plan-id}.md`.
 
-## Output
-
-Write a standardized Markdown work ticket to `~/.config/symphony/work_tickets/{plan-id}.md`.
-Ensure the directory exists before writing (`mkdir -p ~/.config/symphony/work_tickets`).
+Done when: the file exists at `~/.config/symphony/work_tickets/{plan-id}.md` with all implementation-relevant sections and no excluded content (discussion, messages, non-execution modules).
 
 ## Output Sections
 
@@ -121,11 +121,7 @@ If the maestro plan URL is known (e.g. `http://localhost:$port/plan/{plan-id}`),
 
 ## Transformation Rules
 
-- **Clean mapping**: Module items map to their respective markdown sections using the `text` field as the primary content.
-- **Drop non-implementation modules**: Exclude `notes`, `questions` (unless answered and decision-relevant), `changes`, and any other non-execution-oriented content.
 - **Flatten lists**: If a module type appears multiple times (e.g. two `criteria` modules), merge all items into a single section.
-- **Preserve order**: Steps should appear in the order they are in the plan — the order IS the execution order.
-- **One file per plan**: Each work ticket is a single `.md` file named `{plan-id}.md`.
 
 ## Example
 

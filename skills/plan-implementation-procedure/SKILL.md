@@ -6,7 +6,7 @@ compatibility: opencode
 
 ## Purpose
 
-After a plan is approved in Maestro — or when the user says "pip it" / "implement the plan" — orchestrate an autonomous loop of two subagents against the approved plan:
+When the user says "pip it" or "implement the plan" against an approved work ticket, orchestrate an autonomous loop of two subagents:
 
 - An **implementer** subagent (medium-tier) edits the working tree to satisfy the plan and writes tests.
 - A **reviewer** subagent (strong-tier) reviews the implementation + tests against the plan and best practices, emitting structured findings and a verdict.

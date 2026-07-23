@@ -179,8 +179,8 @@ Done when: `GET /api/plan/{id}` returns the plan.
 
 ## Grilling Interview Phase
 
-After authoring the plan (and before or during the feedback session), the agent SHOULD actively interview the user to stress-test the plan.
-This is **not** a passive review — the agent asks clarifying questions via maestro messages, one at a time, and updates the plan with the answers.
+After authoring the plan, actively interview the user to stress-test the plan before the final review.
+Ask clarifying questions via maestro messages, one at a time, and update the plan with the answers as each question is resolved.
 
 - Use the **grilling** skill to drive this phase: ask probing questions about decisions, risks, assumptions, and trade-offs.
 - Walk down each branch of the decision tree, resolving dependencies one-by-one.
