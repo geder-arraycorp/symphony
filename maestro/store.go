@@ -113,7 +113,7 @@ func (s *PlanStore) persistPlan(id string) error {
 }
 
 // AddMessage appends a message to the plan's conversation thread and persists.
-func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error) {
+func (s *PlanStore) AddMessage(id, role, text, itemRef string, prompt *Prompt) (*Message, error) {
 	s.mu.Lock()
 
 	plan, ok := s.plans[id]
@@ -127,6 +127,7 @@ func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error)
 		Role:      role,
 		Text:      text,
 		ItemRef:   itemRef,
+		Prompt:    prompt,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	plan.Messages = append(plan.Messages, msg)
@@ -141,9 +142,16 @@ func (s *PlanStore) AddMessage(id, role, text, itemRef string) (*Message, error)
 	return &msg, nil
 }
 
+// MsgEntry holds a single entry for batch message addition.
+type MsgEntry struct {
+	Text    string
+	ItemRef string
+	Prompt  *Prompt
+}
+
 // AddMessages appends multiple messages to the plan's conversation thread atomically,
 // persists once, and triggers a single broadcast.
-func (s *PlanStore) AddMessages(id, role string, entries []struct{ Text, ItemRef string }) ([]Message, error) {
+func (s *PlanStore) AddMessages(id, role string, entries []MsgEntry) ([]Message, error) {
 	s.mu.Lock()
 
 	plan, ok := s.plans[id]
@@ -163,6 +171,7 @@ func (s *PlanStore) AddMessages(id, role string, entries []struct{ Text, ItemRef
 			Role:      role,
 			Text:      e.Text,
 			ItemRef:   e.ItemRef,
+			Prompt:    e.Prompt,
 			CreatedAt: now,
 		}
 		plan.Messages = append(plan.Messages, msg)
@@ -236,6 +245,35 @@ func (s *PlanStore) DeletePlan(id string) error {
 		s.onChange(id)
 	}
 	return nil
+}
+
+// CreatePlan creates a new plan with the given title and summary, persists it,
+// and returns the created plan. Uses a kebab-case ID derived from the title.
+func (s *PlanStore) CreatePlan(id, title, summary string) (*Plan, error) {
+	s.mu.Lock()
+	if _, ok := s.plans[id]; ok {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("plan already exists: %s", id)
+	}
+
+	plan := &Plan{
+		Title:   title,
+		Summary: summary,
+		State:   "draft",
+	}
+	s.plans[id] = plan
+	s.mu.Unlock()
+
+	if err := s.persistPlan(id); err != nil {
+		s.mu.Lock()
+		delete(s.plans, id)
+		s.mu.Unlock()
+		return nil, err
+	}
+	if s.onChange != nil {
+		s.onChange(id)
+	}
+	return plan, nil
 }
 
 // RemovePlan removes a plan from in-memory store without touching disk.

@@ -1,0 +1,384 @@
+{{define "title"}}Grilling — {{.Plan.Title}} — Maestro{{end}}
+
+{{define "page-content"}}
+
+<div class="wizard-container" id="wizard-container">
+	<div class="wizard-main" id="wizard-main">
+		<div class="wizard-prompt-card" id="wizard-prompt-card">
+			<div class="wizard-prompt-header">
+				<h2 class="wizard-prompt-title" id="wizard-prompt-title"></h2>
+				<span class="wizard-prompt-badge" id="wizard-prompt-badge" style="display:none;"></span>
+			</div>
+			<p class="wizard-prompt-text" id="wizard-prompt-text"></p>
+
+			<div class="wizard-options" id="wizard-options">
+			</div>
+
+			<div class="wizard-custom" id="wizard-custom" style="display:none;">
+				<label class="wizard-custom-label" for="wizard-custom-input">Your answer:</label>
+				<textarea class="wizard-custom-input" id="wizard-custom-input" rows="2" placeholder="Type your own answer…"></textarea>
+				<button class="wizard-custom-submit" id="wizard-custom-submit" onclick="submitCustom()">Submit</button>
+			</div>
+
+			<div class="wizard-sent-state" id="wizard-sent-state" style="display:none;">
+				<div class="wizard-spinner"></div>
+				<p>✓ Response sent — waiting for the next question…</p>
+			</div>
+
+			<div class="wizard-waiting-state" id="wizard-waiting-state" style="display:none;">
+				<div class="wizard-spinner"></div>
+				<p>Waiting for the agent to ask the next question…</p>
+			</div>
+		</div>
+
+		<div class="wizard-history" id="wizard-history" style="display:none;">
+			<div class="wizard-history-header">
+				<span class="wizard-history-title">Previous questions</span>
+			</div>
+			<div class="wizard-history-list" id="wizard-history-list">
+			</div>
+		</div>
+	</div>
+</div>
+
+{{end}}
+
+{{define "scripts"}}
+<script>
+	const planID = "{{.PlanID}}";
+	const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+	const ws = new WebSocket(wsProto + "//" + location.host + "/ws/plan/" + planID);
+	var currentPromptKey = null;
+	var pendingResponseKey = null;
+
+	/* ── WebSocket ── */
+	ws.onmessage = function(event) {
+		const plan = JSON.parse(event.data);
+
+		// Redirect to plan page if approved
+		if (plan.state === "approved") {
+			window.location.href = "/plan/" + planID;
+			return;
+		}
+
+		updateAgentDot(plan.agent_status);
+		renderFromMessages(plan.messages || []);
+	};
+
+	ws.onclose = function() {
+		console.log("WebSocket closed");
+	};
+
+	function pollAgentStatus() {
+		fetch("/api/agent/" + planID + "/status")
+			.then(function(r) { return r.json(); })
+			.then(function(data) { updateAgentDot(data.status); })
+			.catch(function() { updateAgentDot("offline"); });
+	}
+	pollAgentStatus();
+	setInterval(pollAgentStatus, 5000);
+
+	/* ── Initial render from WebSocket handshake or server data ── */
+	// The WebSocket sends the full plan immediately on connect.
+	// Fallback: check if we already have server-rendered data.
+	(function() {
+		// WebSocket will trigger onmessage on connect, which calls renderFromMessages.
+		// If for some reason WS is not available, show waiting state.
+		setTimeout(function() {
+			var card = document.getElementById("wizard-prompt-card");
+			if (card && card.style.display === "none" && document.getElementById("wizard-waiting-state").style.display === "none") {
+				showWaiting("Connecting to agent…");
+			}
+		}, 2000);
+	})();
+
+	/* ── Core render logic ── */
+
+	function renderFromMessages(messages) {
+		if (!messages || messages.length === 0) {
+			showWaiting("Waiting for the agent to ask the first question…");
+			return;
+		}
+
+		// Collect previously answered question_keys (#7)
+		var answeredKeys = {};
+		for (var i = 0; i < messages.length; i++) {
+			var m = messages[i];
+			if (m.role === "agent" && m.prompt && m.prompt.answered) {
+				answeredKeys[m.prompt.question_key] = true;
+			}
+		}
+
+		// Scan newest-first for latest unanswered agent prompt
+		var currentPrompt = null;
+		var currentMsg = null;
+		var currentMsgIdx = -1;
+		for (var i = messages.length - 1; i >= 0; i--) {
+			var m = messages[i];
+			if (m.role === "agent" && m.prompt && !m.prompt.answered) {
+				// Skip if this question_key was already answered by a later message (#7)
+				if (answeredKeys[m.prompt.question_key]) {
+					continue;
+				}
+				currentPrompt = m.prompt;
+				currentMsg = m;
+				currentMsgIdx = i;
+				break;
+			}
+		}
+
+		if (currentPrompt) {
+			// Race condition guard (#1): if user answered this question
+			// and a human message exists after it, skip and wait for agent
+			if (pendingResponseKey === currentPrompt.question_key) {
+				var hasHumanAfter = false;
+				for (var j = currentMsgIdx + 1; j < messages.length; j++) {
+					if (messages[j].role === "human") {
+						hasHumanAfter = true;
+						break;
+					}
+				}
+				if (hasHumanAfter) {
+					showWaiting("Response sent — waiting for the next question…");
+					renderHistory(messages);
+					return;
+				}
+			}
+
+			// New different question — clear pending flag
+			if (pendingResponseKey && pendingResponseKey !== currentPrompt.question_key) {
+				pendingResponseKey = null;
+			}
+			currentPromptKey = currentPrompt.question_key;
+			renderPromptCard(currentMsg, currentPrompt, messages);
+			renderHistory(messages);
+		} else {
+			// Check if agent is still in the process — look for any prompt messages
+			var anyPrompt = false;
+			for (var j = 0; j < messages.length; j++) {
+				if (messages[j].role === "agent" && messages[j].prompt) {
+					anyPrompt = true;
+					break;
+				}
+			}
+			if (anyPrompt) {
+				// All prompts answered — show View Plan link (#3)
+				showAllAnswered();
+				renderHistory(messages);
+			} else {
+				showWaiting("Waiting for the agent to ask the first question…");
+				document.getElementById("wizard-history").style.display = "none";
+			}
+		}
+	}
+
+	function renderPromptCard(msg, prompt, messages) {
+		document.getElementById("wizard-prompt-card").style.display = "";
+		document.getElementById("wizard-sent-state").style.display = "none";
+		document.getElementById("wizard-waiting-state").style.display = "none";
+
+		// Populate h2 title (#4)
+		document.getElementById("wizard-prompt-title").textContent = "Question";
+
+		document.getElementById("wizard-prompt-text").textContent = msg.text;
+
+		// Badge (#5) — use sequential prompt counter instead of raw question_key
+		var badge = document.getElementById("wizard-prompt-badge");
+		if (prompt.total_questions > 0) {
+			var promptCount = 0;
+			for (var i = 0; i < messages.length; i++) {
+				if (messages[i].role === "agent" && messages[i].prompt) {
+					promptCount++;
+					if (messages[i].prompt.question_key === prompt.question_key) break;
+				}
+			}
+			badge.style.display = "";
+			badge.textContent = "Q " + promptCount + "/" + prompt.total_questions;
+		} else {
+			badge.style.display = "none";
+		}
+
+		// Options
+		var optionsDiv = document.getElementById("wizard-options");
+		optionsDiv.innerHTML = "";
+		if (prompt.options && prompt.options.length > 0) {
+			var recIdx = prompt.recommended ? (prompt.recommended - 1) : -1;
+			if (recIdx >= prompt.options.length) recIdx = -1;
+			prompt.options.forEach(function(opt, idx) {
+				var btn = document.createElement("button");
+				btn.className = "wizard-option-btn";
+				if (idx === recIdx) {
+					btn.className += " recommended";
+					var badge = document.createElement("span");
+					badge.className = "wizard-option-recommended-badge";
+					badge.textContent = "Recommended";
+					btn.appendChild(badge);
+				}
+				var label = document.createTextNode(opt);
+				btn.appendChild(label);
+				btn.onclick = function() { submitOption(opt, this); };
+				optionsDiv.appendChild(btn);
+			});
+		}
+
+		// Custom input
+		var customDiv = document.getElementById("wizard-custom");
+		if (prompt.allow_custom) {
+			customDiv.style.display = "";
+			document.getElementById("wizard-custom-input").value = "";
+		} else {
+			customDiv.style.display = "none";
+		}
+	}
+
+	function submitOption(optionText, btnEl) {
+		// Disable all option buttons
+		var btns = document.querySelectorAll(".wizard-option-btn");
+		btns.forEach(function(b) { b.disabled = true; });
+		if (btnEl) btnEl.classList.add("selected");
+
+		// Hide custom area
+		document.getElementById("wizard-custom").style.display = "none";
+
+		sendResponse(optionText);
+	}
+
+	function submitCustom() {
+		var input = document.getElementById("wizard-custom-input");
+		var text = input.value.trim();
+		if (!text) return;
+
+		document.getElementById("wizard-custom-submit").disabled = true;
+		document.getElementById("wizard-custom-input").disabled = true;
+
+		sendResponse(text);
+	}
+
+	function sendResponse(text) {
+		// Set pending response guard before sending (#1)
+		pendingResponseKey = currentPromptKey;
+
+		document.getElementById("wizard-sent-state").style.display = "";
+
+		fetch("/api/plan/" + planID + "/messages", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				role: "human",
+				text: text
+			})
+		})
+		.then(function(resp) {
+			if (!resp.ok) throw new Error("Server returned " + resp.status);
+			return resp.json();
+		})
+		.then(function(msg) {
+			// Response sent — waiting for next question
+			showWaiting("Response sent — waiting for the next question…");
+		})
+		.catch(function(err) {
+			console.error("Failed to send response:", err);
+			pendingResponseKey = null;
+			// Re-enable on error
+			document.getElementById("wizard-sent-state").style.display = "none";
+			var btns = document.querySelectorAll(".wizard-option-btn");
+			btns.forEach(function(b) { b.disabled = false; b.classList.remove("selected"); });
+			document.getElementById("wizard-custom-submit").disabled = false;
+			document.getElementById("wizard-custom-input").disabled = false;
+		});
+	}
+
+	function showWaiting(msg) {
+		document.getElementById("wizard-prompt-card").style.display = "";
+		document.getElementById("wizard-prompt-title").textContent = "";
+		document.getElementById("wizard-options").innerHTML = "";
+		document.getElementById("wizard-custom").style.display = "none";
+		document.getElementById("wizard-prompt-badge").style.display = "none";
+		document.getElementById("wizard-prompt-text").textContent = "";
+		document.getElementById("wizard-sent-state").style.display = "none";
+		document.getElementById("wizard-waiting-state").style.display = "";
+		document.getElementById("wizard-waiting-state").querySelector("p").textContent = msg;
+	}
+
+	function showAllAnswered() {
+		// All prompts answered — show View Plan link (#3)
+		document.getElementById("wizard-prompt-card").style.display = "";
+		document.getElementById("wizard-prompt-title").textContent = "Complete";
+		document.getElementById("wizard-options").innerHTML = "";
+		document.getElementById("wizard-custom").style.display = "none";
+		document.getElementById("wizard-prompt-badge").style.display = "none";
+		document.getElementById("wizard-prompt-text").textContent = "";
+		document.getElementById("wizard-sent-state").style.display = "none";
+		document.getElementById("wizard-waiting-state").style.display = "";
+		document.getElementById("wizard-waiting-state").querySelector("p").innerHTML =
+			'All questions answered. <a href="/plan/' + planID + '" class="wizard-view-plan-link">View Plan →</a>';
+	}
+
+	function renderHistory(messages) {
+		var historyDiv = document.getElementById("wizard-history");
+		var listDiv = document.getElementById("wizard-history-list");
+
+		// Collect answered prompts paired with their human responses
+		var answeredQAs = [];
+		for (var i = 0; i < messages.length; i++) {
+			var m = messages[i];
+			if (m.role === "agent" && m.prompt && m.prompt.answered) {
+				// Find the next human response after this message
+				var answerText = m.prompt.answer || "";
+				if (!answerText) {
+					for (var j = i + 1; j < messages.length; j++) {
+						if (messages[j].role === "human") {
+							answerText = messages[j].text;
+							break;
+						}
+					}
+				}
+				answeredQAs.push({
+					question: m.text,
+					answer: answerText,
+					prompt: m.prompt
+				});
+			}
+		}
+
+		if (answeredQAs.length === 0) {
+			historyDiv.style.display = "none";
+			return;
+		}
+
+		historyDiv.style.display = "";
+		listDiv.innerHTML = "";
+
+		answeredQAs.forEach(function(qa, idx) {
+			var item = document.createElement("div");
+			item.className = "wizard-history-item";
+
+			var summary = document.createElement("div");
+			summary.className = "wizard-history-summary";
+			var shortQ = qa.question.length > 60 ? qa.question.substring(0, 57) + "…" : qa.question;
+			var shortA = qa.answer.length > 40 ? qa.answer.substring(0, 37) + "…" : qa.answer;
+			summary.innerHTML = '<span class="wizard-history-q">Q: ' + escapeHtml(shortQ) + '</span>' +
+				'<span class="wizard-history-arrow">→</span>' +
+				'<span class="wizard-history-a">' + escapeHtml(shortA) + '</span>' +
+				'<span class="wizard-history-toggle">▸</span>';
+
+			var detail = document.createElement("div");
+			detail.className = "wizard-history-detail";
+			detail.style.display = "none";
+			detail.innerHTML = '<p class="wizard-history-detail-q"><strong>Question:</strong> ' + escapeHtml(qa.question) + '</p>' +
+				'<p class="wizard-history-detail-a"><strong>Answer:</strong> ' + escapeHtml(qa.answer) + '</p>';
+
+			summary.onclick = function() {
+				var isOpen = detail.style.display !== "none";
+				detail.style.display = isOpen ? "none" : "";
+				var toggle = summary.querySelector(".wizard-history-toggle");
+				toggle.textContent = isOpen ? "▸" : "▾";
+			};
+
+			item.appendChild(summary);
+			item.appendChild(detail);
+			listDiv.appendChild(item);
+		});
+	}
+</script>
+{{end}}

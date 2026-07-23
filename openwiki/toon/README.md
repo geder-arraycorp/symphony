@@ -2,7 +2,7 @@
 
 TOON is a compact, human-readable encoding of JSON data designed to minimize token usage for LLM interactions. It typically saves 30–60% tokens compared to formatted JSON.
 
-**This project includes a Go implementation of TOON** at `maestro/lib/toon/` used by the Maestro planning server to store and load plan files. The full format specification and TypeScript reference implementation are available at [toonformat.dev](https://toonformat.dev).
+The full format specification and TypeScript reference implementation are available at [toonformat.dev](https://toonformat.dev). The Maestro planning server previously used TOON for plan storage but has since migrated to JSON.
 
 ## Overview
 
@@ -94,60 +94,6 @@ data:
 data.metadata.items[2]: a,b
 ```
 
-## Go Library
+## Usage in Symphony
 
-The project at `maestro/lib/toon/` is a Go port of the TypeScript `@toon-format/toon` library.
-
-### Source Files
-
-| File | Purpose |
-|------|---------|
-| `toon.go` | Top-level encode/decode API |
-| `encode.go` | JSON-to-TOON encoding |
-| `decode.go` | TOON-to-JSON decoding |
-| `parser.go` | Core parser structure |
-| `structural_parser.go` | Low-level structural parser (48KB, the largest file) |
-| `primitives.go` | Primitive value parsing |
-| `arrays.go` | Array (tabular + list) handling |
-| `objects.go` | Object parsing and rendering |
-| `orderedmap.go` | Ordered map for stable key iteration |
-| `types.go` | Type definitions |
-| `constants.go` | Configuration constants |
-| `options.go` | Encode/Decode options |
-| `errors.go` | Error types |
-| `writer.go` | Output writer |
-| `utils.go` | Utility functions |
-
-### Usage in Maestro
-
-Maestro uses TOON for plan file storage. The round-trip:
-
-```
-Plan struct → json.Marshal → map[string]any → toon.Marshal → .toon file
-.toon file → toon.Unmarshal → map[string]any → json.Marshal → json.Unmarshal → Plan struct
-```
-
-This is done in `maestro/store.go`:
-
-```go
-// Decoding (loadFile → decodePlan)
-func decodePlan(data []byte) (*Plan, error) {
-    var raw map[string]any
-    toon.Unmarshal(data, &raw, &toon.DecodeOptions{Strict: false})
-    js, _ := json.Marshal(raw)
-    var plan Plan
-    json.Unmarshal(js, &plan)
-    return &plan, nil
-}
-
-// Encoding (persistPlan)
-toonBytes, _ := toon.Marshal(raw, &toon.EncodeOptions{Indent: 2})
-os.WriteFile(path, toonBytes, 0644)
-```
-
-### Important Notes for Developers
-
-- The `replace` directive in `maestro/go.mod` maps the import `github.com/sstraus/toon_go/toon` to the local `./lib/toon` directory.
-- The Go library is **not tested** — there are no `*_test.go` files in `maestro/lib/toon/`.
-- The parser has a known behavior: when a list-item object has a list-format array as its first field, trailing sibling fields at the same indentation level can be absorbed into the last array item. See the [TOON skill](../skills/README.md) for the workaround (place `type`/`heading` before items).
-- Strict mode is disabled (`Strict: false`) in Maestro's plan decoding to tolerate hand-edited files.
+The TOON format is available as a skill (`toon`) for use by LLM agents when generating compact structured output. It is also the native format for Maestro `.toon` plan files on disk, though the Maestro server stores plans as JSON internally.

@@ -51,7 +51,7 @@
 		</div>
 		{{end}}
 	{{else}}
-		<p class="empty-state">No plans yet. Place a <code>.toon</code> file in the plans directory.</p>
+		<p class="empty-state">No plans yet. Place a <code>.json</code> file in the plans directory.</p>
 	{{end}}
 </section>
 
@@ -204,7 +204,7 @@
 	}
 
 	function showEmptyState() {
-		planList.innerHTML = '<p class="empty-state">No plans yet. Place a <code>.toon</code> file in the plans directory.</p>';
+		planList.innerHTML = '<p class="empty-state">No plans yet. Place a <code>.json</code> file in the plans directory.</p>';
 	}
 
 	// Close modal on Escape

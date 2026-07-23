@@ -1,6 +1,7 @@
-# Ignore all plan files except the reference one showing all module types
+# Ignore runtime plan files generated in the plans directory
 maestro/plans/*
-!maestro/plans/test-all-modules.toon
+!maestro/plans/module-showcase.json
+!maestro/plans/grilling-wizard-demo.json
 *.pid
 
 # Research skill scratch notes (never committed)

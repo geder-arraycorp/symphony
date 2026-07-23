@@ -8,21 +8,36 @@ import (
 
 // Plan represents a structured planning document with a conversation thread.
 type Plan struct {
-	Title    string    `json:"title"`
-	Summary  string    `json:"summary"`
-	State    string    `json:"state"`              // "draft" or "approved"
-	UpdatedAt string   `json:"updated_at,omitempty"`
-	Messages []Message `json:"messages,omitempty"`
-	Modules  []Module  `json:"modules"`
+	Title     string    `json:"title"`
+	Summary   string    `json:"summary"`
+	State     string    `json:"state"` // "draft" or "approved"
+	UpdatedAt string    `json:"updated_at,omitempty"`
+	Messages  []Message `json:"messages,omitempty"`
+	Modules   []Module  `json:"modules"`
+}
+
+// Prompt is an optional structured question attached to an agent message
+// for interactive grilling wizard sessions.
+type Prompt struct {
+	QuestionKey    string   `json:"question_key"`
+	Options        []string `json:"options"`
+	AllowCustom    bool     `json:"allow_custom"`
+	TotalQuestions int      `json:"total_questions,omitempty"`
+	Answered       bool     `json:"answered"`
+	Answer         string   `json:"answer,omitempty"`
+	// Recommended is a 1-based index into Options indicating the agent's
+	// recommended choice. 0 means no recommendation.
+	Recommended int `json:"recommended,omitempty"`
 }
 
 // Message is a single entry in the plan's conversation thread.
 type Message struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`                // "agent" or "human"
-	Text      string `json:"text"`
-	ItemRef   string `json:"item_ref,omitempty"`  // "moduleIndex:itemIndex" positional ref
-	CreatedAt string `json:"created_at"`
+	ID        string  `json:"id"`
+	Role      string  `json:"role"` // "agent" or "human"
+	Text      string  `json:"text"`
+	ItemRef   string  `json:"item_ref,omitempty"` // "moduleIndex:itemIndex" positional ref
+	Prompt    *Prompt `json:"prompt,omitempty"`
+	CreatedAt string  `json:"created_at"`
 }
 
 // Column defines a single column in a table module.
@@ -67,11 +82,11 @@ type FlatPlan struct {
 }
 
 type FlatModule struct {
-	Type       string       `json:"type"`
-	Heading    string       `json:"heading"`
-	Items      []FlatItem   `json:"items"`
-	Columns    []Column     `json:"columns,omitempty"`
-	HideRowNum bool         `json:"hideRowNum,omitempty"`
+	Type       string     `json:"type"`
+	Heading    string     `json:"heading"`
+	Items      []FlatItem `json:"items"`
+	Columns    []Column   `json:"columns,omitempty"`
+	HideRowNum bool       `json:"hideRowNum,omitempty"`
 }
 
 type FlatItem struct {

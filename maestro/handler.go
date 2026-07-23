@@ -108,8 +108,54 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/plan.html"), data)
 	})
 
-	// API: list plans
+	// Grilling wizard page
+	http.HandleFunc("/grill/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/grill/")
+		if id == "" {
+			http.NotFound(w, r)
+			return
+		}
+		plan := store.Get(id)
+		if plan == nil {
+			http.NotFound(w, r)
+			return
+		}
+		data := PlanPageData{
+			Title:  plan.Title,
+			Year:   2026,
+			Plan:   plan,
+			PlanID: id,
+		}
+		renderPage(w, baseTmpl, filepath.Join(baseDir, "templates/grill.html"), data)
+	})
+
+	// API: list plans (GET) or create plan (POST)
 	http.HandleFunc("/api/plans", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var body struct {
+				ID      string `json:"id"`
+				Title   string `json:"title"`
+				Summary string `json:"summary"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			if body.ID == "" || body.Title == "" {
+				http.Error(w, "id and title are required", http.StatusBadRequest)
+				return
+			}
+			plan, err := store.CreatePlan(body.ID, body.Title, body.Summary)
+			if err != nil {
+				log.Printf("create plan error: %v", err)
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(toFlatPlan(plan, "listening"))
+			return
+		}
 		plans := store.List()
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(plans); err != nil {
@@ -151,7 +197,7 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 					http.NotFound(w, r)
 					return
 				}
-								fp := toFlatPlan(plan, agentState.GetStatus(parts[0]))
+				fp := toFlatPlan(plan, agentState.GetStatus(parts[0]))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				w.Write(fp.JSON())
@@ -171,12 +217,13 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 				}
 				r.Body.Close()
 
-				// Try batch format first: { messages: [{ role, text, item_ref }, ...] }
+				// Try batch format first: { messages: [{ role, text, item_ref, prompt }, ...] }
 				var batchBody struct {
 					Messages []struct {
-						Role    string `json:"role"`
-						Text    string `json:"text"`
-						ItemRef string `json:"item_ref,omitempty"`
+						Role    string  `json:"role"`
+						Text    string  `json:"text"`
+						ItemRef string  `json:"item_ref,omitempty"`
+						Prompt  *Prompt `json:"prompt,omitempty"`
 					} `json:"messages"`
 				}
 				if err := json.Unmarshal(bodyBytes, &batchBody); err == nil && len(batchBody.Messages) > 1 {
@@ -186,17 +233,21 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 						http.Error(w, "role must be 'agent' or 'human'", http.StatusBadRequest)
 						return
 					}
-					entries := make([]struct{ Text, ItemRef string }, 0, len(batchBody.Messages))
+					entries := make([]MsgEntry, 0, len(batchBody.Messages))
 					for _, m := range batchBody.Messages {
 						if m.Role != role {
 							http.Error(w, "all messages in a batch must have the same role", http.StatusBadRequest)
 							return
 						}
-						if m.Text == "" {
-							http.Error(w, "text is required for all messages", http.StatusBadRequest)
-							return
-						}
-						entries = append(entries, struct{ Text, ItemRef string }{m.Text, m.ItemRef})
+					if m.Text == "" {
+						http.Error(w, "text is required for all messages", http.StatusBadRequest)
+						return
+					}
+					if m.Prompt != nil && m.Prompt.Recommended > len(m.Prompt.Options) {
+						http.Error(w, "recommended index is out of bounds", http.StatusBadRequest)
+						return
+					}
+					entries = append(entries, MsgEntry{Text: m.Text, ItemRef: m.ItemRef, Prompt: m.Prompt})
 					}
 
 					msgs, err := store.AddMessages(msgID, role, entries)
@@ -218,11 +269,12 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 					return
 				}
 
-				// Single message: { role, text, item_ref }
+				// Single message: { role, text, item_ref, prompt }
 				var single struct {
-					Role    string `json:"role"`
-					Text    string `json:"text"`
-					ItemRef string `json:"item_ref,omitempty"`
+					Role    string  `json:"role"`
+					Text    string  `json:"text"`
+					ItemRef string  `json:"item_ref,omitempty"`
+					Prompt  *Prompt `json:"prompt,omitempty"`
 				}
 				if err := json.Unmarshal(bodyBytes, &single); err != nil {
 					http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -236,7 +288,11 @@ func registerRoutes(baseTmpl *template.Template, store *PlanStore, hub *Hub, age
 					http.Error(w, "text is required", http.StatusBadRequest)
 					return
 				}
-				msg, err := store.AddMessage(msgID, single.Role, single.Text, single.ItemRef)
+				if single.Prompt != nil && single.Prompt.Recommended > len(single.Prompt.Options) {
+					http.Error(w, "recommended index is out of bounds", http.StatusBadRequest)
+					return
+				}
+				msg, err := store.AddMessage(msgID, single.Role, single.Text, single.ItemRef, single.Prompt)
 				if err != nil {
 					log.Printf("add message error: %v", err)
 					http.Error(w, "internal error", http.StatusInternalServerError)
